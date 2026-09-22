@@ -4,16 +4,13 @@ import {
   Printer, 
   Search, 
   Calendar, 
-  Loader2,
-  Pencil,
-  Trash2,
-  Plus,
-  X,
-  Save,
-  Sparkles
+  Pencil, 
+  Trash2, 
+  Plus, 
+  X, 
+  Save, 
+  Sparkles 
 } from 'lucide-react';
-import html2canvas from 'html2canvas-pro';
-import jsPDF from 'jspdf';
 
 interface PrintReportProps {
   dailyMenus: DailyMenuEntry[];
@@ -39,9 +36,6 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   
   // Filter by search
   const [searchFilter, setSearchFilter] = useState<string>('');
-  
-  // Generating PDF state
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
 
   // Edit Modal State (Requirement 1.1 & 1.8)
   const [editingEntry, setEditingEntry] = useState<DailyMenuEntry | null>(null);
@@ -202,66 +196,6 @@ export const PrintReport: React.FC<PrintReportProps> = ({
     window.print();
   };
 
-  // Generate & direct download A4 Portrait PDF file
-  const handleDownloadPdf = async () => {
-    const element = document.getElementById('printable-a4-sheet');
-    if (!element) return;
-
-    if (monthEntries.length === 0) {
-      showToast('ไม่มีข้อมูล', 'ไม่มีรายการอาหารในเดือนที่เลือกสำหรับสร้าง PDF', 'warning');
-      return;
-    }
-
-    try {
-      setIsGeneratingPdf(true);
-      showToast('กำลังจัดเตรียม PDF...', 'ระบบกำลังประมวลผลหน้ากระดาษ A4 แนวตั้ง กรุณารอสักครู่', 'info');
-
-      // Use html2canvas-pro with ignoreElements to exclude any .no-print elements
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        ignoreElements: (el) => el.classList.contains('no-print')
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.98);
-      
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pdfWidth = 210;
-      const pdfHeight = 297;
-      const contentHeight = (canvas.height * pdfWidth) / canvas.width;
-
-      if (contentHeight > pdfHeight) {
-        const scaleFactor = pdfHeight / contentHeight;
-        const fittedWidth = pdfWidth * scaleFactor;
-        const xOffset = (pdfWidth - fittedWidth) / 2;
-        pdf.addImage(imgData, 'JPEG', xOffset, 0, fittedWidth, pdfHeight);
-      } else {
-        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, contentHeight);
-      }
-
-      const thaiMonthName = THAI_MONTHS[selectedMonth - 1];
-      const buddhistYear = selectedYear + 543;
-      const filename = `รายงานอาหารกลางวัน_${thaiMonthName}_${buddhistYear}.pdf`;
-      pdf.save(filename);
-
-      showToast('ดาวน์โหลด PDF สำเร็จ', `ดาวน์โหลดไฟล์ ${filename} เรียบร้อยแล้ว (ขนาด A4 แนวตั้ง)`, 'success');
-    } catch (err) {
-      console.error('PDF generation error:', err);
-      showToast('เปิดคำสั่งพิมพ์', 'เปิดหน้าต่างพิมพ์เพื่อให้คุณบันทึกเป็น PDF ได้ทันที', 'info');
-      window.print();
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
-
   /**
    * Requirement 1.1: Auto-suggestions from MenuBank for each field
    */
@@ -373,38 +307,16 @@ export const PrintReport: React.FC<PrintReportProps> = ({
             />
           </div>
 
-          {/* Action Button: Print */}
+          {/* Action Button: Print / Save as PDF via Browser */}
           <button
             id="btn-print-action"
             type="button"
             onClick={handlePrint}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-            title="สั่งพิมพ์ A4 (Print)"
+            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+            title="สั่งพิมพ์ A4 หรือบันทึกเป็นไฟล์ PDF"
           >
-            <Printer className="w-4 h-4 text-emerald-400" />
+            <Printer className="w-4 h-4" />
             <span>พิมพ์</span>
-          </button>
-
-          {/* Action Button: PDF */}
-          <button
-            id="btn-download-pdf"
-            type="button"
-            onClick={handleDownloadPdf}
-            disabled={isGeneratingPdf}
-            className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-            title="พิมพ์ / บันทึกไฟล์ PDF ขนาด A4 แนวตั้ง"
-          >
-            {isGeneratingPdf ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>ประมวลผล PDF...</span>
-              </>
-            ) : (
-              <>
-                <Printer className="w-4 h-4" />
-                <span>PDF (A4)</span>
-              </>
-            )}
           </button>
         </div>
       </div>

@@ -52,11 +52,12 @@ body {
  * ------------------------------------------------------------- */
 @page {
   size: A4 portrait;
-  margin: 6mm 8mm 6mm 8mm; /* Compact margins to guarantee 1-page fit */
+  margin: 8mm 10mm 8mm 10mm;
 }
 
 @media print {
   /* Hide all screen UI components */
+  html,
   body {
     background: #ffffff !important;
     color: #000000 !important;
@@ -65,6 +66,14 @@ body {
     font-family: 'Sarabun', 'Prompt', serif !important;
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
+  }
+
+  main {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
   }
 
   .no-print,
@@ -79,29 +88,38 @@ body {
     display: none !important;
   }
 
-  /* Force print container */
+  /* Force print container: Flow naturally without pushing to next page */
+  .space-y-4 > * + * {
+    margin-top: 0 !important;
+  }
+
+  #printable-a4-sheet,
   .print-page-container {
     display: block !important;
     width: 100% !important;
-    max-width: 194mm !important;
-    margin: 0 auto !important;
+    max-width: 100% !important;
+    margin: 0 !important;
     padding: 0 !important;
-    page-break-after: avoid !important;
-    page-break-inside: avoid !important;
+    border: none !important;
+    box-shadow: none !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
   }
 
-  /* Print Header styling */
+  /* Print Header styling: MUST avoid break after so table stays with header on Page 1 */
   .print-header {
     border-bottom: 2pt solid #000000 !important;
-    padding-bottom: 6px !important;
-    margin-bottom: 10px !important;
+    padding-bottom: 4px !important;
+    margin-bottom: 8px !important;
     text-align: center !important;
+    page-break-after: avoid !important;
+    break-after: avoid-page !important;
   }
 
   .print-header h1 {
     font-size: 16pt !important;
     font-weight: bold !important;
-    margin: 0 0 4px 0 !important;
+    margin: 0 0 3px 0 !important;
     color: #000000 !important;
     text-align: center !important;
   }
@@ -113,14 +131,30 @@ body {
     text-align: center !important;
   }
 
-  /* Table layout with larger comfortable font expanding towards the bottom edge of A4 */
+  /* Table: MUST start on Page 1 with header, then split rows onto Page 2 if needed */
   table.a4-print-table {
     width: 100% !important;
     border-collapse: collapse !important;
-    margin-top: 6px !important;
+    margin-top: 0 !important;
     font-size: 11pt !important;
-    line-height: 1.4 !important;
+    line-height: 1.35 !important;
+    page-break-before: avoid !important;
+    break-before: avoid-page !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  table.a4-print-table thead {
+    display: table-header-group !important;
     page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    page-break-after: avoid !important;
+    break-after: avoid-page !important;
+  }
+
+  table.a4-print-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   table.a4-print-table th {
@@ -129,7 +163,7 @@ body {
     font-size: 11.5pt !important;
     font-weight: bold !important;
     border: 1.2pt solid #000000 !important;
-    padding: 7px 8px !important;
+    padding: 6px 8px !important;
     text-align: center !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -137,7 +171,7 @@ body {
 
   table.a4-print-table td {
     border: 1pt solid #333333 !important;
-    padding: 6.5px 8px !important;
+    padding: 6px 8px !important;
     vertical-align: middle !important;
     font-size: 10.5pt !important;
   }
