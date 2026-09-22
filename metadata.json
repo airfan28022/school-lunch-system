@@ -1,0 +1,6 @@
+{
+  "name": "ระบบบริหารจัดการอาหารกลางวันโรงเรียน",
+  "description": "ระบบบริหารจัดการอาหารกลางวันโรงเรียน จัดการคลังเมนูอาหาร วางแผนเมนูประจำวัน และพิมพ์รายงาน A4 ประจำเดือน เชื่อมต่อ Google Drive และ Google Sheets",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
