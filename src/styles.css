@@ -92,49 +92,54 @@ body {
 
   /* Print Header styling */
   .print-header {
-    border-bottom: 1.5pt solid #000000 !important;
-    padding-bottom: 2px !important;
-    margin-bottom: 4px !important;
+    border-bottom: 2pt solid #000000 !important;
+    padding-bottom: 6px !important;
+    margin-bottom: 10px !important;
+    text-align: center !important;
   }
 
   .print-header h1 {
-    font-size: 13pt !important;
+    font-size: 16pt !important;
     font-weight: bold !important;
-    margin: 0 0 2px 0 !important;
+    margin: 0 0 4px 0 !important;
     color: #000000 !important;
+    text-align: center !important;
   }
 
   .print-header p {
-    font-size: 9pt !important;
+    font-size: 11pt !important;
     margin: 0 !important;
-    color: #222222 !important;
+    color: #333333 !important;
+    text-align: center !important;
   }
 
-  /* Table strict layout for fitting ~20-23 school days in 1 page */
+  /* Table layout with larger comfortable font expanding towards the bottom edge of A4 */
   table.a4-print-table {
     width: 100% !important;
     border-collapse: collapse !important;
-    margin-top: 3px !important;
-    font-size: 8pt !important;
-    line-height: 1.15 !important;
+    margin-top: 6px !important;
+    font-size: 11pt !important;
+    line-height: 1.4 !important;
     page-break-inside: avoid !important;
   }
 
   table.a4-print-table th {
     background-color: #f1f5f9 !important;
     color: #000000 !important;
+    font-size: 11.5pt !important;
     font-weight: bold !important;
-    border: 1pt solid #000000 !important;
-    padding: 2.5px 4px !important;
+    border: 1.2pt solid #000000 !important;
+    padding: 7px 8px !important;
     text-align: center !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
   table.a4-print-table td {
-    border: 0.8pt solid #333333 !important;
-    padding: 2px 4px !important;
+    border: 1pt solid #333333 !important;
+    padding: 6.5px 8px !important;
     vertical-align: middle !important;
+    font-size: 10.5pt !important;
   }
 
   /* Monday row soft yellow weekly separator */
@@ -143,25 +148,31 @@ body {
     background-color: #fef9c3 !important; /* soft yellow */
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    border-top: 1.5pt solid #ca8a04 !important;
+    border-top: 2pt solid #ca8a04 !important;
   }
 
   /* Specific column widths for 3-column table: วันที่, รายการอาหาร, หมายเหตุ */
   .col-print-date {
-    width: 16% !important;
+    width: 15% !important;
     text-align: center !important;
     white-space: nowrap !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
+    font-size: 10.5pt !important;
   }
 
   .col-print-menu {
-    width: 66% !important;
+    width: 68% !important;
     text-align: left !important;
   }
 
-  .col-print-note {
-    width: 18% !important;
+  th.col-print-menu {
     text-align: center !important;
+  }
+
+  .col-print-note {
+    width: 17% !important;
+    text-align: center !important;
+    font-size: 10pt !important;
   }
 
   .col-print-action {

@@ -550,13 +550,14 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
 
           {/* Month & Year Selectors + Action Button */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2 py-1 shadow-2xs">
-              <span className="text-[11px] font-semibold text-slate-600">เดือน:</span>
+            {/* Unified Month & Year Selector with single Calendar icon (Requirement 2.2) */}
+            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 shadow-2xs">
+              <CalendarIcon className="w-4 h-4 text-orange-600 shrink-0" />
               <select
                 id="select-random-month"
                 value={randomMonth}
                 onChange={(e) => setRandomMonth(Number(e.target.value))}
-                className="text-xs font-semibold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
+                className="text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
               >
                 {THAI_MONTH_NAMES.map((mName, idx) => (
                   <option key={idx + 1} value={idx + 1}>
@@ -564,15 +565,12 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2 py-1 shadow-2xs">
-              <span className="text-[11px] font-semibold text-slate-600">ปี:</span>
+              <span className="text-slate-300">|</span>
               <select
                 id="select-random-year"
                 value={randomYear}
                 onChange={(e) => setRandomYear(Number(e.target.value))}
-                className="text-xs font-semibold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
+                className="text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
               >
                 {[2025, 2026, 2027, 2028].map((y) => (
                   <option key={y} value={y}>
@@ -742,21 +740,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
             )}
           </div>
 
-          {/* Native HTML5 Date Picker as Accessible Alternative */}
-          <div className="relative">
-            <input
-              id="input-native-date-picker"
-              type="date"
-              value={selectedDate}
-              onChange={(e) => {
-                if (e.target.value) {
-                  setSelectedDate(e.target.value);
-                }
-              }}
-              className="text-xs bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl px-2 py-1.5 text-slate-700 cursor-pointer focus:ring-2 focus:ring-orange-500"
-              title="เลือกวันที่จากปฏิทินของเบราว์เซอร์"
-            />
-          </div>
+
 
           {/* Next day button */}
           <button
