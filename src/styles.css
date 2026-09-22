@@ -137,7 +137,16 @@ body {
     vertical-align: middle !important;
   }
 
-  /* Specific column widths */
+  /* Monday row soft yellow weekly separator */
+  tr.print-monday-row td,
+  tr.print-monday-row {
+    background-color: #fef9c3 !important; /* soft yellow */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    border-top: 1.5pt solid #ca8a04 !important;
+  }
+
+  /* Specific column widths for 3-column table: วันที่, รายการอาหาร, หมายเหตุ */
   .col-print-date {
     width: 16% !important;
     text-align: center !important;
@@ -146,13 +155,17 @@ body {
   }
 
   .col-print-menu {
-    width: 64% !important;
+    width: 66% !important;
     text-align: left !important;
   }
 
   .col-print-note {
-    width: 20% !important;
+    width: 18% !important;
     text-align: center !important;
+  }
+
+  .col-print-action {
+    display: none !important;
   }
 
   /* Signature section */

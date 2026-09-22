@@ -1,14 +1,18 @@
 import React, { useState, useMemo } from 'react';
-import { DailyMenuEntry, SchoolSettings } from '../types';
-import { FALLBACK_IMAGE_URL } from '../services/api';
+import { DailyMenuEntry, SchoolSettings, MenuItem } from '../types';
 import { 
   Printer, 
-  Download, 
   ArrowUpDown, 
   Search, 
   Calendar, 
   Loader2,
-  FileCheck
+  FileCheck,
+  Pencil,
+  Trash2,
+  Plus,
+  X,
+  Save,
+  Sparkles
 } from 'lucide-react';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
@@ -17,12 +21,18 @@ interface PrintReportProps {
   dailyMenus: DailyMenuEntry[];
   settings: SchoolSettings;
   showToast: (title: string, message?: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
+  menuBank?: MenuItem[];
+  onSaveDailyMenu?: (entry: DailyMenuEntry) => Promise<boolean> | boolean;
+  onDeleteDailyMenu?: (dateStr: string) => Promise<void> | void;
 }
 
 export const PrintReport: React.FC<PrintReportProps> = ({
   dailyMenus,
   settings,
-  showToast
+  showToast,
+  menuBank = [],
+  onSaveDailyMenu,
+  onDeleteDailyMenu
 }) => {
   // Month & Year state
   const currentDate = new Date();
@@ -35,6 +45,19 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   
   // Generating PDF state
   const [isGeneratingPdf, setIsGeneratingPdf] = useState<boolean>(false);
+
+  // Edit Modal State (Requirement 1.8)
+  const [editingEntry, setEditingEntry] = useState<DailyMenuEntry | null>(null);
+  const [editRice, setEditRice] = useState<string>('');
+  const [editSingleDish, setEditSingleDish] = useState<string>('');
+  const [editNonSpicy, setEditNonSpicy] = useState<string>('');
+  const [editSpicy, setEditSpicy] = useState<string>('');
+  const [editDessert, setEditDessert] = useState<string>('');
+  const [editNote, setEditNote] = useState<string>('');
+
+  // Add New Date Modal State
+  const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
+  const [newDateStr, setNewDateStr] = useState<string>('');
 
   const THAI_MONTHS = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -73,7 +96,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   }, [dailyMenus, monthKey, searchFilter, sortOrder]);
 
   /**
-   * แปลงวันที่เป็นรูปแบบสั้น เช่น "จ. 1/9/69", "อ. 2/9/69"
+   * Format Short Date: e.g. "จ. 1/9/69", "อ. 2/9/69"
    */
   const formatShortDate = (dateStr: string): string => {
     if (!dateStr) return '';
@@ -87,19 +110,96 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   };
 
   /**
-   * รวมรายการอาหารในวันนั้นให้กระชับ ชัดเจน
+   * Requirement 1.7: Format meal list as "ข้าว + ผัดเผ็ด + แกงจืด + ส้ม"
    */
-  const formatFullMeal = (entry: DailyMenuEntry): string => {
-    const items: string[] = [];
-    if (entry.singleDish) items.push(entry.singleDish);
-    if (entry.rice) items.push(entry.rice);
-    if (entry.nonSpicy) items.push(entry.nonSpicy);
-    if (entry.spicy) items.push(entry.spicy);
-    if (entry.dessert) items.push(entry.dessert);
-    return items.join(' | ');
+  const formatMealList = (entry: DailyMenuEntry): string => {
+    if (entry.singleDish) {
+      const parts = [`${entry.singleDish} (อาหารจานเดียว)`];
+      if (entry.dessert) parts.push(entry.dessert);
+      return parts.join(' + ');
+    }
+
+    const items = [
+      entry.rice,
+      entry.spicy,
+      entry.nonSpicy,
+      entry.dessert
+    ].filter(Boolean);
+
+    if (items.length === 0) return '-';
+    return items.join(' + ');
   };
 
-  // Trigger browser native print (defaults to Save as PDF / Print, constrained to 1-page A4)
+  // Open Edit Modal for a day
+  const handleOpenEdit = (entry: DailyMenuEntry) => {
+    setEditingEntry(entry);
+    setEditRice(entry.rice || '');
+    setEditSingleDish(entry.singleDish || '');
+    setEditNonSpicy(entry.nonSpicy || '');
+    setEditSpicy(entry.spicy || '');
+    setEditDessert(entry.dessert || '');
+    setEditNote(entry.note || '');
+  };
+
+  // Save changes from Edit Modal
+  const handleSaveEdit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editingEntry) return;
+
+    const updated: DailyMenuEntry = {
+      ...editingEntry,
+      rice: editRice.trim(),
+      singleDish: editSingleDish.trim(),
+      nonSpicy: editNonSpicy.trim(),
+      spicy: editSpicy.trim(),
+      dessert: editDessert.trim(),
+      note: editNote.trim(),
+      lastModified: new Date().toISOString()
+    };
+
+    if (onSaveDailyMenu) {
+      await onSaveDailyMenu(updated);
+      showToast('บันทึกการแก้ไขสำเร็จ', `อัปเดตรายการอาหารวันที่ ${formatShortDate(updated.date)} เรียบร้อยแล้ว`, 'success');
+    }
+    setEditingEntry(null);
+  };
+
+  // Delete row
+  const handleDeleteRow = async (dateStr: string) => {
+    if (window.confirm(`ยืนยันการลบรายการอาหารวันที่ ${formatShortDate(dateStr)} หรือไม่?`)) {
+      if (onDeleteDailyMenu) {
+        await onDeleteDailyMenu(dateStr);
+        showToast('ลบรายการสำเร็จ', `ลบเมนูวันที่ ${formatShortDate(dateStr)} เรียบร้อยแล้ว`, 'info');
+      }
+      if (editingEntry?.date === dateStr) {
+        setEditingEntry(null);
+      }
+    }
+  };
+
+  // Add new day entry in this month
+  const handleAddNewDay = async () => {
+    if (!newDateStr) {
+      showToast('กรุณาระบุวันที่', 'โปรดเลือกวันที่ต้องการเพิ่มรายการอาหาร', 'warning');
+      return;
+    }
+    const newEntry: DailyMenuEntry = {
+      date: newDateStr,
+      rice: '',
+      singleDish: '',
+      nonSpicy: '',
+      spicy: '',
+      dessert: '',
+      note: '',
+      photos: [],
+      lastModified: new Date().toISOString()
+    };
+
+    setIsAddModalOpen(false);
+    handleOpenEdit(newEntry);
+  };
+
+  // Trigger browser native print
   const handlePrint = () => {
     window.print();
   };
@@ -118,18 +218,18 @@ export const PrintReport: React.FC<PrintReportProps> = ({
       setIsGeneratingPdf(true);
       showToast('กำลังจัดเตรียม PDF...', 'ระบบกำลังประมวลผลหน้ากระดาษ A4 แนวตั้ง กรุณารอสักครู่', 'info');
 
-      // Use html2canvas-pro to capture the exact rendered element
+      // Use html2canvas-pro with ignoreElements to exclude any .no-print elements
       const canvas = await html2canvas(element, {
         scale: 2,
         useCORS: true,
         allowTaint: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        ignoreElements: (el) => el.classList.contains('no-print')
       });
 
       const imgData = canvas.toDataURL('image/jpeg', 0.98);
       
-      // Standard A4 portrait: 210mm x 297mm
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -140,7 +240,6 @@ export const PrintReport: React.FC<PrintReportProps> = ({
       const pdfHeight = 297;
       const contentHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      // Ensure strictly 1 page: if content height exceeds A4 height, scale to fit 100% on 1 page
       if (contentHeight > pdfHeight) {
         const scaleFactor = pdfHeight / contentHeight;
         const fittedWidth = pdfWidth * scaleFactor;
@@ -167,11 +266,12 @@ export const PrintReport: React.FC<PrintReportProps> = ({
 
   const thaiMonthName = THAI_MONTHS[selectedMonth - 1];
   const buddhistYear = selectedYear + 543;
-  const reportTitle = `รายงานอาหารกลางวัน ประจำเดือน ${thaiMonthName} ${buddhistYear}`;
 
   return (
-    <div className="space-y-5">
-      {/* Control Bar: Month/Year selector, Filter, Print & Download PDF (Screen Only) */}
+    <div className="space-y-4">
+      {/* ------------------------------------------------------------- */}
+      {/* Control Bar: Screen Only                                      */}
+      {/* ------------------------------------------------------------- */}
       <div className="no-print bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         {/* Left: Month & Year Selectors */}
         <div className="flex flex-wrap items-center gap-2.5">
@@ -209,6 +309,19 @@ export const PrintReport: React.FC<PrintReportProps> = ({
           <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
             พบ {monthEntries.length} วัน
           </span>
+
+          <button
+            type="button"
+            onClick={() => {
+              setNewDateStr(`${monthKey}-01`);
+              setIsAddModalOpen(true);
+            }}
+            className="px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 flex items-center gap-1 transition-colors cursor-pointer"
+            title="เพิ่มเมนูวันใหม่ในเดือนนี้"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>เพิ่มวันในเดือนนี้</span>
+          </button>
         </div>
 
         {/* Right: Search, Sort & Action Buttons */}
@@ -241,79 +354,66 @@ export const PrintReport: React.FC<PrintReportProps> = ({
             id="btn-print-action"
             type="button"
             onClick={handlePrint}
-            className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-            title="สั่งพิมพ์ออกเครื่องพิมพ์ หรือบันทึกเป็น PDF ผ่านคำสั่งพิมพ์"
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+            title="สั่งพิมพ์ A4 (Print)"
           >
             <Printer className="w-4 h-4 text-emerald-400" />
-            <span>พิมพ์รายงาน (Print A4)</span>
+            <span>พิมพ์</span>
           </button>
 
-          {/* Action Button: Direct Download PDF */}
+          {/* Action Button: PDF */}
           <button
             id="btn-download-pdf"
             type="button"
             onClick={handleDownloadPdf}
             disabled={isGeneratingPdf}
-            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-            title="ดาวน์โหลดเป็นไฟล์ PDF ขนาด A4 แนวตั้ง 1 หน้า/เดือน ทันที"
+            className="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+            title="พิมพ์ / บันทึกไฟล์ PDF ขนาด A4 แนวตั้ง"
           >
             {isGeneratingPdf ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>กำลังสร้าง PDF...</span>
+                <span>ประมวลผล PDF...</span>
               </>
             ) : (
               <>
-                <Download className="w-4 h-4" />
-                <span>ดาวน์โหลดไฟล์ PDF</span>
+                <Printer className="w-4 h-4" />
+                <span>PDF (A4)</span>
               </>
             )}
           </button>
         </div>
       </div>
 
-      {/* A4 Printable Sheet Container (Screen Card + Exact Print Format) */}
+      {/* ------------------------------------------------------------- */}
+      {/* A4 Printable Sheet Container                                  */}
+      {/* ------------------------------------------------------------- */}
       <div 
         id="printable-a4-sheet"
-        className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200 shadow-sm print-page-container mx-auto max-w-[210mm]"
+        className="bg-white p-5 sm:p-7 rounded-2xl border border-slate-200 shadow-sm print-page-container mx-auto max-w-[210mm]"
       >
-        {/* Printable Header */}
-        <div className="print-header flex items-start justify-between gap-4 pb-2.5 mb-2.5 border-b-2 border-slate-900">
-          <div className="flex items-center gap-3">
-            <img
-              src={settings.logoUrl || FALLBACK_IMAGE_URL}
-              alt="School Logo"
-              crossOrigin="anonymous"
-              className="w-12 h-12 object-contain rounded-md"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = FALLBACK_IMAGE_URL;
-              }}
-            />
-            <div>
-              <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
-                {reportTitle}
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-700 font-semibold mt-0.5">
-                {settings.schoolName || 'โรงเรียนเทศบาลพัฒนา'}
-              </p>
-              <p className="text-[10pt] text-slate-600">
-                {settings.department || 'สังกัดสำนักงานเขตพื้นที่การศึกษา'}
-              </p>
-            </div>
-          </div>
-
-          <div className="text-right text-[9pt] text-slate-600 shrink-0">
-            <div>ผู้รับผิดชอบ: <span className="font-semibold text-slate-900">{settings.managerName || 'หัวหน้างานโภชนาการ'}</span></div>
-            <div>พิมพ์เมื่อ: {new Date().toLocaleDateString('th-TH')}</div>
-            <div className="text-[8pt] text-emerald-700 font-medium">รายงานขนาด A4 แนวตั้ง (1 หน้า/เดือน)</div>
-          </div>
+        {/* Printable Header:
+            1.1 เอาโลโก้ออก
+            1.2 รายงานอาหารกลางวัน ประจำเดือน... ให้อยู่บรรทัดบนแรกตรงกลาง
+            1.3 เอาออกชื่อผู้รับผิดชอบทั้งหมด
+            1.4 เอาออกพิมพ์เมื่อ...
+            1.5 เอาออกสังกัด...
+            1.6 เอาออกคำว่าตารางเมนูอาหารกลางวัน
+        */}
+        <div className="print-header text-center pb-2.5 mb-3 border-b-2 border-slate-900">
+          <h1 className="text-base sm:text-xl font-bold text-slate-900 text-center tracking-tight">
+            รายงานอาหารกลางวัน ประจำเดือน {thaiMonthName} {buddhistYear}
+          </h1>
+          {settings.schoolName && (
+            <p className="text-xs sm:text-sm font-semibold text-slate-700 text-center mt-0.5">
+              {settings.schoolName}
+            </p>
+          )}
         </div>
 
-        {/* 3-Column A4 Table:
-            1. วันที่ (จ. 1/9/69)
-            2. รายการอาหารประจำวัน
-            3. หมายเหตุ / ลายมือชื่อ
-        */}
+        {/* ------------------------------------------------------------- */}
+        {/* Table: 3 Main Columns (วันที่, รายการอาหาร, หมายเหตุ)          */}
+        {/* ------------------------------------------------------------- */}
         {monthEntries.length === 0 ? (
           <div className="text-center py-12 border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
             ไม่มีข้อมูลเมนูอาหารในเดือน {thaiMonthName} {buddhistYear}
@@ -321,43 +421,80 @@ export const PrintReport: React.FC<PrintReportProps> = ({
         ) : (
           <table className="a4-print-table w-full border-collapse text-left">
             <thead>
-              <tr className="bg-slate-100 text-slate-900 font-bold border border-slate-900 text-xs">
-                <th className="col-print-date p-2 border border-slate-900 text-center">
+              <tr className="bg-slate-100 text-slate-900 font-bold border border-slate-900 text-[9pt]">
+                {/* 1. วันที่ */}
+                <th className="col-print-date p-1.5 border border-slate-900 text-center">
                   วันที่
                 </th>
-                <th className="col-print-menu p-2 border border-slate-900">
-                  รายการอาหารประจำวัน
+
+                {/* 2. รายการอาหาร */}
+                <th className="col-print-menu p-1.5 border border-slate-900">
+                  รายการอาหาร
                 </th>
-                <th className="col-print-note p-2 border border-slate-900 text-center">
-                  หมายเหตุ / ลายมือชื่อ
+
+                {/* 3. หมายเหตุ */}
+                <th className="col-print-note p-1.5 border border-slate-900 text-center">
+                  หมายเหตุ
+                </th>
+
+                {/* Screen-Only Edit Action Column (1.8) */}
+                <th className="no-print col-print-action p-1.5 border border-slate-300 text-center w-16 bg-slate-50 text-slate-600">
+                  แก้ไข
                 </th>
               </tr>
             </thead>
             <tbody>
               {monthEntries.map((entry) => {
-                const fullMeal = formatFullMeal(entry);
                 const shortDate = formatShortDate(entry.date);
+                const parts = entry.date.split('-').map(Number);
+                const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                const isMonday = d.getDay() === 1;
+                const mealString = formatMealList(entry);
 
                 return (
-                  <tr key={entry.date} className="border border-slate-800 text-[9pt] leading-tight">
+                  <tr 
+                    key={entry.date} 
+                    className={`border border-slate-800 text-[8.5pt] leading-tight ${
+                      isMonday ? 'print-monday-row bg-amber-100/70 border-t-2 border-amber-400' : 'hover:bg-slate-50/60'
+                    }`}
+                  >
                     {/* 1. วันที่: รูปแบบสั้น เช่น จ. 1/9/69 */}
-                    <td className="col-print-date p-1.5 border border-slate-700 font-bold text-center whitespace-nowrap bg-slate-50/50">
+                    <td className={`col-print-date p-1 border border-slate-700 font-bold text-center whitespace-nowrap ${
+                      isMonday ? 'bg-amber-200/60 text-amber-950' : 'bg-slate-50/40 text-slate-900'
+                    }`}>
                       {shortDate}
                     </td>
 
-                    {/* 2. รายการอาหาร */}
-                    <td className="col-print-menu p-1.5 border border-slate-700 text-slate-900">
-                      <div className="font-medium">{fullMeal || '-'}</div>
-                      {(entry.rice && entry.singleDish) && (
-                        <div className="text-[8pt] text-slate-500 mt-0.5">
-                          {entry.rice} + {entry.singleDish}
-                        </div>
-                      )}
+                    {/* 2. รายการอาหาร เช่น ข้าว + ผัดเผ็ด + แกงจืด + ส้ม */}
+                    <td className="col-print-menu p-1.5 border border-slate-700 text-slate-900 font-medium">
+                      {mealString}
                     </td>
 
                     {/* 3. หมายเหตุ */}
-                    <td className="col-print-note p-1.5 border border-slate-700 text-center text-[8pt] text-slate-600">
+                    <td className="col-print-note p-1 border border-slate-700 text-center text-[7.5pt] text-slate-600">
                       {entry.note || ''}
+                    </td>
+
+                    {/* Screen-Only Edit & Delete Actions (1.8) */}
+                    <td className="no-print col-print-action p-1 border border-slate-300 text-center whitespace-nowrap bg-white">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(entry)}
+                          className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
+                          title="แก้ไขรายการอาหารวันนี้"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRow(entry.date)}
+                          className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
+                          title="ลบเมนูวันนี้"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -371,21 +508,21 @@ export const PrintReport: React.FC<PrintReportProps> = ({
           <div className="signature-box flex-1">
             <div className="signature-line border-b border-dotted border-slate-700 h-5 mb-1"></div>
             <p className="font-bold">ลงชื่อ..................................................</p>
-            <p className="text-[10px] text-slate-600">({settings.managerName || 'ผู้จัดทำ / แม่ครัว'})</p>
+            <p className="text-[10px] text-slate-500">(........................................................)</p>
             <p className="text-[10px] text-slate-500">ผู้จัดทำอาหารกลางวัน</p>
           </div>
 
           <div className="signature-box flex-1">
             <div className="signature-line border-b border-dotted border-slate-700 h-5 mb-1"></div>
             <p className="font-bold">ลงชื่อ..................................................</p>
-            <p className="text-[10px] text-slate-600">(........................................................)</p>
+            <p className="text-[10px] text-slate-500">(........................................................)</p>
             <p className="text-[10px] text-slate-500">ครูเวรโภชนาการประจำวัน</p>
           </div>
 
           <div className="signature-box flex-1">
             <div className="signature-line border-b border-dotted border-slate-700 h-5 mb-1"></div>
             <p className="font-bold">ลงชื่อ..................................................</p>
-            <p className="text-[10px] text-slate-600">({settings.directorName || 'ผู้อำนวยการโรงเรียน'})</p>
+            <p className="text-[10px] text-slate-500">(........................................................)</p>
             <p className="text-[10px] text-slate-500">ผู้อำนวยการสถานศึกษา</p>
           </div>
         </div>
@@ -396,6 +533,212 @@ export const PrintReport: React.FC<PrintReportProps> = ({
           <span>ขนาดเอกสารได้รับการปรับแต่งให้พอดีหน้ากระดาษ A4 แนวตั้ง 1 หน้าต่อ 1 เดือน</span>
         </div>
       </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* Edit Entry Modal (Requirement 1.8)                            */}
+      {/* ------------------------------------------------------------- */}
+      {editingEntry && (
+        <div className="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Pencil className="w-4 h-4 text-orange-600" />
+                  แก้ไขรายการอาหาร
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  วันที่: {formatShortDate(editingEntry.date)} ({editingEntry.date})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingEntry(null)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-3.5">
+              {/* 1. ข้าว */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  1. ข้าว
+                </label>
+                <input
+                  type="text"
+                  placeholder="เช่น ข้าวสวยหอมมะลิ..."
+                  value={editRice}
+                  onChange={(e) => {
+                    setEditRice(e.target.value);
+                    if (e.target.value.trim()) setEditSingleDish('');
+                  }}
+                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+
+              {/* 2. อาหารจานเดียว */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  2. อาหารจานเดียว (ถ้ามี ช่องข้าวและกับข้าวจะถูกล้าง)
+                </label>
+                <input
+                  type="text"
+                  placeholder="เช่น ข้าวมันไก่ตอน..."
+                  value={editSingleDish}
+                  onChange={(e) => {
+                    setEditSingleDish(e.target.value);
+                    if (e.target.value.trim()) {
+                      setEditRice('');
+                      setEditNonSpicy('');
+                      setEditSpicy('');
+                    }
+                  }}
+                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+
+              {/* 3. อาหารไม่เผ็ด */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  3. อาหารไม่เผ็ด
+                </label>
+                <input
+                  type="text"
+                  placeholder="เช่น ต้มจืดเต้าหู้หมูสับ..."
+                  value={editNonSpicy}
+                  onChange={(e) => setEditNonSpicy(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+
+              {/* 4. อาหารเผ็ด */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  4. อาหารเผ็ด
+                </label>
+                <input
+                  type="text"
+                  placeholder="เช่น ผัดกะเพราหมูสับ..."
+                  value={editSpicy}
+                  onChange={(e) => setEditSpicy(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+
+              {/* 5. ผลไม้-ของหวาน */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  5. ผลไม้-ของหวาน
+                </label>
+                <input
+                  type="text"
+                  placeholder="เช่น ส้มเขียวหวาน หรือ บัวลอย..."
+                  value={editDessert}
+                  onChange={(e) => setEditDessert(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+
+              {/* 6. หมายเหตุ */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  6. หมายเหตุ
+                </label>
+                <input
+                  type="text"
+                  placeholder="หมายเหตุเพิ่มเติม..."
+                  value={editNote}
+                  onChange={(e) => setEditNote(e.target.value)}
+                  className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500"
+                />
+              </div>
+
+              {/* Modal Buttons */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteRow(editingEntry.date)}
+                  className="px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl border border-rose-200 transition-colors cursor-pointer"
+                >
+                  ลบเมนูวันนี้
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingEntry(null)}
+                    className="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>บันทึกการแก้ไข</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* Add New Date Modal                                            */}
+      {/* ------------------------------------------------------------- */}
+      {isAddModalOpen && (
+        <div className="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5">
+                <Plus className="w-4 h-4 text-blue-600" />
+                เพิ่มเมนูวันใหม่
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  เลือกวันที่ในเดือน {thaiMonthName} {buddhistYear}
+                </label>
+                <input
+                  type="date"
+                  value={newDateStr}
+                  onChange={(e) => setNewDateStr(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddNewDay}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer"
+                >
+                  ต่อไป (ใส่รายการอาหาร)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -18,7 +18,8 @@ import {
   Download, 
   FileText,
   Image as ImageIcon,
-  ExternalLink
+  ExternalLink,
+  Server
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -34,7 +35,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onTestGasConnection,
   showToast
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'gas' | 'code' | 'cloudflare'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'backend'>('profile');
+  const [backendSubTab, setBackendSubTab] = useState<'gas' | 'code' | 'cloudflare'>('gas');
 
   // Form states
   const [schoolName, setSchoolName] = useState<string>(initialSettings.schoolName || '');
@@ -200,9 +202,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           id="tab-btn-profile"
           type="button"
           onClick={() => setActiveTab('profile')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
             activeTab === 'profile'
-              ? 'bg-blue-600 text-white shadow-xs'
+              ? 'bg-amber-500 text-slate-950 shadow-xs'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
           }`}
         >
@@ -211,45 +213,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </button>
 
         <button
-          id="tab-btn-gas"
+          id="tab-btn-backend"
           type="button"
-          onClick={() => setActiveTab('gas')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-            activeTab === 'gas'
-              ? 'bg-blue-600 text-white shadow-xs'
+          onClick={() => setActiveTab('backend')}
+          className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
+            activeTab === 'backend'
+              ? 'bg-slate-900 text-white shadow-xs'
               : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
           }`}
         >
-          <Cloud className="w-4 h-4" />
-          <span>เชื่อมต่อ Google Apps Script (GAS)</span>
-        </button>
-
-        <button
-          id="tab-btn-code"
-          type="button"
-          onClick={() => setActiveTab('code')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-            activeTab === 'code'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Code className="w-4 h-4" />
-          <span>โค้ด Code.gs (Google Apps Script)</span>
-        </button>
-
-        <button
-          id="tab-btn-cloudflare"
-          type="button"
-          onClick={() => setActiveTab('cloudflare')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-            activeTab === 'cloudflare'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>วิธี Deploy บน Cloudflare Pages</span>
+          <Server className="w-4 h-4 text-amber-400" />
+          <span>ระบบหลังบ้าน (Backend & Deploy)</span>
         </button>
       </div>
 
@@ -437,19 +411,67 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </form>
       )}
 
-      {/* Tab 2: GAS Connector Form */}
-      {activeTab === 'gas' && (
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-5">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                เชื่อมต่อ Google Apps Script Web App (GAS)
-              </h3>
-              <p className="text-xs text-slate-500">
-                นำ Web App URL ที่ได้จากการกด "Deploy &gt; New deployment &gt; Web app" ใน Apps Script มาวางที่นี่
-              </p>
-            </div>
+      {/* Tab 2: Backend System (GAS Connection, Code.gs, Cloudflare Deploy) */}
+      {activeTab === 'backend' && (
+        <div className="space-y-4">
+          {/* Sub-navigation for Backend System */}
+          <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200">
+            <button
+              id="subtab-btn-gas"
+              type="button"
+              onClick={() => setBackendSubTab('gas')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                backendSubTab === 'gas'
+                  ? 'bg-white text-blue-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Cloud className="w-3.5 h-3.5" />
+              <span>1. เชื่อมต่อ Google Apps Script (GAS)</span>
+            </button>
+
+            <button
+              id="subtab-btn-code"
+              type="button"
+              onClick={() => setBackendSubTab('code')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                backendSubTab === 'code'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Code className="w-3.5 h-3.5" />
+              <span>2. โค้ด Code.gs</span>
+            </button>
+
+            <button
+              id="subtab-btn-cloudflare"
+              type="button"
+              onClick={() => setBackendSubTab('cloudflare')}
+              className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                backendSubTab === 'cloudflare'
+                  ? 'bg-white text-orange-700 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>3. วิธี Deploy บน Cloudflare Pages</span>
+            </button>
           </div>
+
+          {/* Sub-view 1: GAS Connector Form */}
+          {backendSubTab === 'gas' && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    เชื่อมต่อ Google Apps Script Web App (GAS)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    นำ Web App URL ที่ได้จากการกด "Deploy &gt; New deployment &gt; Web app" ใน Apps Script มาวางที่นี่
+                  </p>
+                </div>
+              </div>
 
           <div className="space-y-3">
             <label className="block text-xs font-semibold text-slate-700">
@@ -538,8 +560,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
       )}
 
-      {/* Tab 3: Complete Code.gs Viewer & Downloader */}
-      {activeTab === 'code' && (
+      {/* Sub-view 2: Complete Code.gs Viewer & Downloader */}
+      {backendSubTab === 'code' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div>
@@ -586,7 +608,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <li>ลบโค้ดเริ่มต้นทั้งหมดในไฟล์ <code className="bg-white px-1 py-0.5 rounded font-mono">Code.gs</code> แล้ววางโค้ดด้านล่างนี้ลงไป</li>
               <li>กดปุ่ม <strong>การทำให้ใช้งานได้ (Deploy) &gt; การทำให้ใช้งานได้ใหม่ (New deployment)</strong></li>
               <li>เลือกประเภท: <strong>เว็บแอป (Web App)</strong> &rarr; ตั้งค่า <strong>ผู้มีสิทธิ์เข้าถึง (Who has access): ทุกคน (Anyone)</strong></li>
-              <li>คัดลอก Web App URL มาใส่ในแท็บ <strong>"เชื่อมต่อ Google Apps Script"</strong></li>
+              <li>คัดลอก Web App URL มาใส่ในเมนู <strong>"1. เชื่อมต่อ Google Apps Script"</strong></li>
             </ol>
           </div>
 
@@ -599,8 +621,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
       )}
 
-      {/* Tab 4: Cloudflare Pages Deployment Guide */}
-      {activeTab === 'cloudflare' && (
+      {/* Sub-view 3: Cloudflare Pages Deployment Guide */}
+      {backendSubTab === 'cloudflare' && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs space-y-4">
           <h3 className="text-base font-bold text-slate-900 border-b pb-3 flex items-center gap-2">
             <Layers className="w-5 h-5 text-orange-600" />
@@ -611,10 +633,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="p-3.5 bg-orange-50/70 border border-orange-200 rounded-xl space-y-1.5">
               <h4 className="font-bold text-orange-950 text-sm">ขั้นตอนที่ 1: เตรียม Google Apps Script (Backend)</h4>
               <p>1. ไปที่ <a href="https://script.google.com" target="_blank" rel="noreferrer" className="text-blue-600 underline">script.google.com</a> แล้วกด New Project</p>
-              <p>2. คัดลอกโค้ดจากแท็บ <strong>โค้ด Code.gs</strong> ไปวางทั้งหมด</p>
+              <p>2. คัดลอกโค้ดจากเมนู <strong>2. โค้ด Code.gs</strong> ไปวางทั้งหมด</p>
               <p>3. กดปุ่ม <strong>Deploy &gt; New deployment</strong> เลือกประเภทเป็น <strong>Web app</strong></p>
               <p>4. ตั้งค่า <strong>Execute as: Me</strong> และ <strong>Who has access: Anyone (ทุกคน)</strong> แล้วกด Deploy</p>
-              <p>5. คัดลอก <strong>Web app URL</strong> ที่ได้มาวางในแท็บ "เชื่อมต่อ Google Apps Script" ของระบบนี้</p>
+              <p>5. คัดลอก <strong>Web app URL</strong> ที่ได้มาวางในเมนู <strong>"1. เชื่อมต่อ Google Apps Script"</strong> ของระบบนี้</p>
             </div>
 
             <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl space-y-1.5">
@@ -630,6 +652,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <p>4. กด <strong>Save and Deploy</strong> ภายในไม่กี่วินาที เว็บแอปพลิเคชันจะออนไลน์บน Cloudflare Pages ด้วยความเร็วสูง!</p>
             </div>
           </div>
+        </div>
+      )}
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DailyMenuEntry, MenuItem, ActivityPhoto, MenuCategory } from '../types';
 import { 
   Calendar as CalendarIcon, 
@@ -10,13 +10,17 @@ import {
   Pencil,
   Sparkles, 
   ArrowRight, 
-  CheckCircle2
+  CheckCircle2,
+  Shuffle,
+  CalendarDays,
+  X
 } from 'lucide-react';
 
 interface DailyMenuPlannerProps {
   dailyMenus: DailyMenuEntry[];
   menuBank: MenuItem[];
   onSaveDailyMenu: (entry: DailyMenuEntry, isAutoAdvance?: boolean) => Promise<boolean> | boolean;
+  onBatchSaveDailyMenus?: (entries: DailyMenuEntry[]) => Promise<boolean> | boolean;
   onDeleteDailyMenu: (dateStr: string) => Promise<void> | void;
   onOpenLightbox?: (photo: ActivityPhoto, allPhotos: ActivityPhoto[], onReplace?: (newPhoto: ActivityPhoto) => void, onDelete?: () => void) => void;
   showToast: (title: string, message?: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
@@ -24,10 +28,23 @@ interface DailyMenuPlannerProps {
   onUploadImageToDrive?: (fileData: string, fileName: string, mimeType: string, activityName: string, dateStr: string) => Promise<ActivityPhoto>;
 }
 
+const THAI_MONTH_NAMES = [
+  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+];
+
+const THAI_MONTH_SHORT = [
+  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+];
+
+const THAI_DAY_NAMES = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+
 export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   dailyMenus,
   menuBank,
   onSaveDailyMenu,
+  onBatchSaveDailyMenus,
   onDeleteDailyMenu,
   showToast
 }) => {
@@ -40,25 +57,49 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   };
 
   const todayStr = toDateString(new Date());
-  // Default date is today automatically
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
-  const dateInputRef = React.useRef<HTMLInputElement>(null);
 
-  const handleOpenDatePicker = () => {
-    if (dateInputRef.current) {
-      if ('showPicker' in HTMLInputElement.prototype) {
-        try {
-          dateInputRef.current.showPicker();
-        } catch {
-          dateInputRef.current.focus();
-        }
-      } else {
-        dateInputRef.current.focus();
-      }
+  // Parse currently selected date
+  const [curYear, curMonth, curDay] = selectedDate.split('-').map(Number);
+
+  // Month Randomizer State (defaults to selectedDate's month & year)
+  const [randomMonth, setRandomMonth] = useState<number>(curMonth || (new Date().getMonth() + 1));
+  const [randomYear, setRandomYear] = useState<number>(curYear || new Date().getFullYear());
+  const [isRandomizing, setIsRandomizing] = useState<boolean>(false);
+
+  // Calendar Popover State
+  const [isCalendarOpen, setIsCalendarOpen] = useState<boolean>(false);
+  const [calViewYear, setCalViewYear] = useState<number>(curYear || new Date().getFullYear());
+  const [calViewMonth, setCalViewMonth] = useState<number>(curMonth || (new Date().getMonth() + 1));
+  const calendarRef = useRef<HTMLDivElement>(null);
+
+  // Sync calendar view month/year when selectedDate changes
+  useEffect(() => {
+    const [y, m] = selectedDate.split('-').map(Number);
+    if (y && m) {
+      setCalViewYear(y);
+      setCalViewMonth(m);
+      setRandomMonth(m);
+      setRandomYear(y);
     }
-  };
+  }, [selectedDate]);
 
-  // Form inputs - note starts as an empty field
+  // Close calendar popover on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (calendarRef.current && !calendarRef.current.contains(event.target as Node)) {
+        setIsCalendarOpen(false);
+      }
+    };
+    if (isCalendarOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isCalendarOpen]);
+
+  // Form inputs
   const [rice, setRice] = useState<string>('');
   const [singleDish, setSingleDish] = useState<string>('');
   const [spicy, setSpicy] = useState<string>('');
@@ -80,7 +121,6 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
       setDessert(existing.dessert || '');
       setNote(existing.note || '');
     } else {
-      // Clear for new entry - note starts empty
       setRice('');
       setSingleDish('');
       setSpicy('');
@@ -118,12 +158,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
     if (!dateStr) return '';
     const parts = dateStr.split('-').map(Number);
     const d = new Date(parts[0], parts[1] - 1, parts[2]);
-    const days = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
-    const months = [
-      'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-      'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
-    ];
-    return `วัน${days[d.getDay()]}ที่ ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear() + 543}`;
+    return `วัน${THAI_DAY_NAMES[d.getDay()]}ที่ ${d.getDate()} ${THAI_MONTH_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`;
   };
 
   // Save handler
@@ -219,6 +254,15 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
       .slice(0, 6);
   };
 
+  // Auto-suggest for field 5 (ผลไม้-ของหวาน): pulls from both 'ผลไม้' and 'ของหวาน'
+  const getDessertSuggestions = (currentText: string) => {
+    const text = currentText.trim().toLowerCase();
+    return menuBank
+      .filter((m) => m.category === 'ผลไม้' || m.category === 'ของหวาน' || m.category === 'ผลไม้-ของหวาน')
+      .filter((m) => !text || m.menuName.toLowerCase().includes(text))
+      .slice(0, 10);
+  };
+
   // Day navigation helpers
   const handlePrevDay = () => {
     const parts = selectedDate.split('-').map(Number);
@@ -234,11 +278,331 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
     setSelectedDate(toDateString(d));
   };
 
+  // -------------------------------------------------------------------------
+  // Requirement 3: Monthly Menu Randomizer Engine
+  // - Single dish: exactly 1 day per week (on Wednesday)
+  // - Dessert: 2 days per week
+  // - Remaining days: Fruit
+  // -------------------------------------------------------------------------
+  const handleRandomizeMonth = async () => {
+    setIsRandomizing(true);
+    try {
+      // 1. Classify items from menuBank
+      const isDessertName = (name: string) => {
+        const n = name.toLowerCase();
+        return n.includes('บัวลอย') || n.includes('กล้วยบวชชี') || n.includes('เฉาก๊วย') || 
+               n.includes('หวาน') || n.includes('ถั่วเขียว') || n.includes('วุ้น');
+      };
+
+      const riceItems = menuBank.filter((m) => m.category === 'ข้าว');
+      const singleDishItems = menuBank.filter((m) => m.category === 'อาหารจานเดียว');
+      const nonSpicyItems = menuBank.filter((m) => m.category === 'อาหารไม่เผ็ด');
+      const spicyItems = menuBank.filter((m) => m.category === 'อาหารเผ็ด');
+      const fruitItems = menuBank.filter((m) => m.category === 'ผลไม้' || (m.category === 'ผลไม้-ของหวาน' && !isDessertName(m.menuName)));
+      const dessertItems = menuBank.filter((m) => m.category === 'ของหวาน' || (m.category === 'ผลไม้-ของหวาน' && isDessertName(m.menuName)));
+
+      if (singleDishItems.length === 0 && riceItems.length === 0) {
+        showToast('คลังเมนูว่าง', 'กรุณาเพิ่มเมนูอาหารในคลังเมนูก่อนสุ่มจัดอาหารกลางวัน', 'warning');
+        return;
+      }
+
+      // 2. Gather all school days (Mon-Fri) in the selected month & year
+      const daysInMonth = new Date(randomYear, randomMonth, 0).getDate();
+      const schoolDaysByWeek: { weekNumber: number; dates: Date[] }[] = [];
+
+      let currentWeek: Date[] = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        const d = new Date(randomYear, randomMonth - 1, day);
+        const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
+
+        // Only Monday (1) to Friday (5)
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+          // If Monday and we already have days, start a new week
+          if (dayOfWeek === 1 && currentWeek.length > 0) {
+            schoolDaysByWeek.push({ weekNumber: schoolDaysByWeek.length + 1, dates: currentWeek });
+            currentWeek = [];
+          }
+          currentWeek.push(d);
+        }
+      }
+      if (currentWeek.length > 0) {
+        schoolDaysByWeek.push({ weekNumber: schoolDaysByWeek.length + 1, dates: currentWeek });
+      }
+
+      const totalSchoolDays = schoolDaysByWeek.reduce((sum, w) => sum + w.dates.length, 0);
+
+      // Check for existing entries in this month
+      const monthPrefix = `${randomYear}-${String(randomMonth).padStart(2, '0')}`;
+      const existingInMonth = dailyMenus.filter((m) => m.date.startsWith(monthPrefix));
+      if (existingInMonth.length > 0) {
+        const confirmMsg = `พบเมนูในเดือน ${THAI_MONTH_NAMES[randomMonth - 1]} ${randomYear + 543} บันทึกอยู่แล้ว ${existingInMonth.length} วัน\n\nต้องการสุ่มจัดเมนูใหม่แทนที่ทั้งหมด (${totalSchoolDays} วันทำการ) หรือไม่?`;
+        if (!window.confirm(confirmMsg)) {
+          return;
+        }
+      }
+
+      // Random picker helper avoiding immediate repeat
+      const getRandom = (arr: MenuItem[], prevName?: string): string => {
+        if (!arr || arr.length === 0) return '';
+        const filtered = arr.filter((x) => x.menuName !== prevName);
+        const pool = filtered.length > 0 ? filtered : arr;
+        return pool[Math.floor(Math.random() * pool.length)].menuName;
+      };
+
+      let lastRice = '';
+      let lastSingleDish = '';
+      let lastNonSpicy = '';
+      let lastSpicy = '';
+      let lastDessert = '';
+      let lastFruit = '';
+
+      const generatedEntries: DailyMenuEntry[] = [];
+
+      // 3. Process each week applying strict constraints
+      schoolDaysByWeek.forEach((week) => {
+        const days = week.dates;
+
+        // Requirement: Dessert 2 days per week, remainder is Fruit
+        // Determine which 2 days of this week get dessert
+        const dessertIndices = new Set<number>();
+        if (days.length <= 2) {
+          dessertIndices.add(0);
+        } else {
+          // Prefer Tuesday (dayOfWeek 2) and Thursday (dayOfWeek 4) if present
+          const tueIdx = days.findIndex((d) => d.getDay() === 2);
+          const thuIdx = days.findIndex((d) => d.getDay() === 4);
+          if (tueIdx !== -1 && thuIdx !== -1) {
+            dessertIndices.add(tueIdx);
+            dessertIndices.add(thuIdx);
+          } else {
+            // Pick 2 random distinct indices
+            const available = days.map((_, i) => i);
+            const first = available.splice(Math.floor(Math.random() * available.length), 1)[0];
+            const second = available.splice(Math.floor(Math.random() * available.length), 1)[0];
+            dessertIndices.add(first);
+            dessertIndices.add(second);
+          }
+        }
+
+        days.forEach((dateObj, idx) => {
+          const dateStr = toDateString(dateObj);
+          const dayOfWeek = dateObj.getDay();
+
+          // Requirement: Single dish 1 day per week, specifically on Wednesday (dayOfWeek === 3)
+          const isWednesday = dayOfWeek === 3;
+
+          let itemRice = '';
+          let itemSingleDish = '';
+          let itemNonSpicy = '';
+          let itemSpicy = '';
+          let itemSweet = '';
+
+          if (isWednesday) {
+            // Wednesday = Single Dish
+            itemSingleDish = getRandom(singleDishItems, lastSingleDish);
+            lastSingleDish = itemSingleDish;
+            itemRice = '';
+            itemNonSpicy = '';
+            itemSpicy = '';
+          } else {
+            // Other days = Rice + Non-Spicy + Spicy
+            itemRice = getRandom(riceItems, lastRice);
+            lastRice = itemRice;
+            itemSingleDish = '';
+            itemNonSpicy = getRandom(nonSpicyItems, lastNonSpicy);
+            lastNonSpicy = itemNonSpicy;
+            itemSpicy = getRandom(spicyItems, lastSpicy);
+            lastSpicy = itemSpicy;
+          }
+
+          // Dessert (2 days/week) vs Fruit (remainder)
+          if (dessertIndices.has(idx)) {
+            itemSweet = getRandom(dessertItems.length > 0 ? dessertItems : fruitItems, lastDessert);
+            lastDessert = itemSweet;
+          } else {
+            itemSweet = getRandom(fruitItems.length > 0 ? fruitItems : dessertItems, lastFruit);
+            lastFruit = itemSweet;
+          }
+
+          generatedEntries.push({
+            date: dateStr,
+            rice: itemRice,
+            singleDish: itemSingleDish,
+            nonSpicy: itemNonSpicy,
+            spicy: itemSpicy,
+            dessert: itemSweet,
+            note: '',
+            photos: []
+          });
+        });
+      });
+
+      // 4. Save to state and GAS
+      if (onBatchSaveDailyMenus) {
+        await onBatchSaveDailyMenus(generatedEntries);
+      } else {
+        for (const entry of generatedEntries) {
+          await onSaveDailyMenu(entry);
+        }
+      }
+
+      // Jump view to the first generated school day
+      if (generatedEntries.length > 0) {
+        setSelectedDate(generatedEntries[0].date);
+      }
+
+      showToast(
+        'สุ่มจัดอาหารกลางวันสำเร็จ!',
+        `จัดเมนูเรียบร้อย ${generatedEntries.length} วันทำการ ประจำเดือน ${THAI_MONTH_NAMES[randomMonth - 1]} ${randomYear + 543} (วันพุธจานเดียว, ขนมหวาน 2 วัน/สัปดาห์, ผลไม้ส่วนที่เหลือ)`,
+        'success'
+      );
+    } catch (err: any) {
+      console.error('Error randomizing monthly menu:', err);
+      showToast('เกิดข้อผิดพลาด', err?.message || 'ไม่สามารถสุ่มจัดเมนูได้', 'error');
+    } finally {
+      setIsRandomizing(false);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Calendar Grid Generator for the Popover
+  // -------------------------------------------------------------------------
+  const calendarDays = React.useMemo(() => {
+    const days: { day: number; dateStr: string; isCurrentMonth: boolean; hasMenu: boolean; isMonday: boolean; isSelected: boolean }[] = [];
+    const firstDayOfMonth = new Date(calViewYear, calViewMonth - 1, 1).getDay(); // 0 = Sun
+    const totalDays = new Date(calViewYear, calViewMonth, 0).getDate();
+    const prevMonthDays = new Date(calViewYear, calViewMonth - 1, 0).getDate();
+
+    // Previous month padding
+    for (let i = firstDayOfMonth - 1; i >= 0; i--) {
+      const d = prevMonthDays - i;
+      const prevDate = new Date(calViewYear, calViewMonth - 2, d);
+      const str = toDateString(prevDate);
+      days.push({
+        day: d,
+        dateStr: str,
+        isCurrentMonth: false,
+        hasMenu: dailyMenus.some((m) => m.date === str),
+        isMonday: prevDate.getDay() === 1,
+        isSelected: str === selectedDate
+      });
+    }
+
+    // Current month days
+    for (let d = 1; d <= totalDays; d++) {
+      const curDate = new Date(calViewYear, calViewMonth - 1, d);
+      const str = toDateString(curDate);
+      days.push({
+        day: d,
+        dateStr: str,
+        isCurrentMonth: true,
+        hasMenu: dailyMenus.some((m) => m.date === str),
+        isMonday: curDate.getDay() === 1,
+        isSelected: str === selectedDate
+      });
+    }
+
+    // Next month padding to fill grid
+    const remaining = 42 - days.length;
+    for (let d = 1; d <= remaining; d++) {
+      const nextDate = new Date(calViewYear, calViewMonth, d);
+      const str = toDateString(nextDate);
+      days.push({
+        day: d,
+        dateStr: str,
+        isCurrentMonth: false,
+        hasMenu: dailyMenus.some((m) => m.date === str),
+        isMonday: nextDate.getDay() === 1,
+        isSelected: str === selectedDate
+      });
+    }
+
+    return days;
+  }, [calViewYear, calViewMonth, dailyMenus, selectedDate]);
+
+  // Mutual exclusion states
+  const hasRice = Boolean(rice.trim());
+  const hasSingleDish = Boolean(singleDish.trim());
+
   return (
-    <div className="space-y-5">
-      {/* Date Navigation & Single Unified Calendar Picker on Left */}
-      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 sm:gap-3">
+    <div className="space-y-4">
+      {/* ------------------------------------------------------------- */}
+      {/* 1. Monthly Randomizer Bar (Requirement 3)                     */}
+      {/* ------------------------------------------------------------- */}
+      <div className="bg-gradient-to-r from-orange-50 via-amber-50 to-yellow-50 border border-orange-200/90 rounded-2xl p-3.5 sm:p-4 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-orange-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Shuffle className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight flex items-center gap-1.5">
+                สุ่มจัดอาหารกลางวันทั้งเดือน
+                <span className="text-[10px] bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full font-medium">
+                  อัตโนมัติ
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                วันพุธจานเดียว 1 วัน/สัปดาห์ &bull; ของหวาน 2 วัน/สัปดาห์ &bull; ที่เหลือเป็นผลไม้สด
+              </p>
+            </div>
+          </div>
+
+          {/* Month & Year Selectors + Action Button */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2 py-1 shadow-2xs">
+              <span className="text-[11px] font-semibold text-slate-600">เดือน:</span>
+              <select
+                id="select-random-month"
+                value={randomMonth}
+                onChange={(e) => setRandomMonth(Number(e.target.value))}
+                className="text-xs font-semibold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
+              >
+                {THAI_MONTH_NAMES.map((mName, idx) => (
+                  <option key={idx + 1} value={idx + 1}>
+                    {mName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-1.5 bg-white border border-slate-300 rounded-xl px-2 py-1 shadow-2xs">
+              <span className="text-[11px] font-semibold text-slate-600">ปี:</span>
+              <select
+                id="select-random-year"
+                value={randomYear}
+                onChange={(e) => setRandomYear(Number(e.target.value))}
+                className="text-xs font-semibold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
+              >
+                {[2025, 2026, 2027, 2028].map((y) => (
+                  <option key={y} value={y}>
+                    พ.ศ. {y + 543}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              id="btn-auto-randomize-month"
+              type="button"
+              disabled={isRandomizing}
+              onClick={handleRandomizeMonth}
+              className="px-3.5 py-1.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+              title="สุ่มจัดเมนูอาหารกลางวันทั้งเดือนตามหลักโภชนาการโรงเรียน"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+              <span>{isRandomizing ? 'กำลังจัดเมนู...' : 'สุ่มจัดอาหารกลางวันทั้งเดือน'}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 2. Interactive Calendar Header & Picker (Requirement 2)       */}
+      {/* ------------------------------------------------------------- */}
+      <div className="relative bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* Previous day button */}
           <button
             id="btn-prev-day"
             type="button"
@@ -246,34 +610,155 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
             className="p-2 text-slate-600 hover:text-orange-600 hover:bg-orange-50 rounded-xl border border-slate-200 transition-colors cursor-pointer"
             title="วันก่อนหน้า"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="w-4 h-4" />
           </button>
 
-          {/* Unified Clickable Thai Date Calendar Picker */}
-          <div className="relative inline-flex items-center">
+          {/* Interactive Date Display Button toggling Custom Thai Calendar Popover */}
+          <div className="relative" ref={calendarRef}>
             <button
               id="btn-calendar-trigger"
               type="button"
-              onClick={handleOpenDatePicker}
-              className="relative flex items-center gap-2 bg-slate-50 hover:bg-orange-50/80 border border-slate-300 hover:border-orange-500 rounded-xl px-3.5 py-1.5 transition-all cursor-pointer group shadow-2xs"
-              title="คลิกเพื่อเลือกวันที่จากปฏิทิน"
+              onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+              className="flex items-center gap-2 bg-slate-50 hover:bg-orange-50/80 border border-slate-300 hover:border-orange-500 rounded-xl px-3.5 py-1.5 transition-all cursor-pointer shadow-2xs group"
+              title="คลิกเพื่อเปิดปฏิทินเลือกวันที่"
             >
               <CalendarIcon className="w-4 h-4 text-orange-600 group-hover:scale-110 transition-transform shrink-0" />
               <span className="text-xs sm:text-sm font-bold text-slate-800 group-hover:text-orange-700 select-none">
                 {formatThaiDisplay(selectedDate)}
               </span>
-              <input
-                ref={dateInputRef}
-                id="input-calendar-picker"
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer pointer-events-auto"
-                title="คลิกเพื่อเลือกวันที่"
-              />
+              <CalendarDays className="w-3.5 h-3.5 text-slate-400 group-hover:text-orange-500 ml-0.5" />
             </button>
+
+            {/* Custom Interactive Thai Calendar Popover */}
+            {isCalendarOpen && (
+              <div 
+                id="popover-thai-calendar"
+                className="absolute left-0 top-full mt-2 z-50 bg-white border border-slate-300 rounded-2xl p-3.5 shadow-xl w-72 sm:w-80 animate-fadeIn"
+              >
+                {/* Popover Header: Month & Year Controls */}
+                <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (calViewMonth === 1) {
+                        setCalViewMonth(12);
+                        setCalViewYear(calViewYear - 1);
+                      } else {
+                        setCalViewMonth(calViewMonth - 1);
+                      }
+                    }}
+                    className="p-1 hover:bg-slate-100 rounded-lg text-slate-600 cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  <div className="text-xs font-bold text-slate-900">
+                    {THAI_MONTH_NAMES[calViewMonth - 1]} พ.ศ. {calViewYear + 543}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (calViewMonth === 12) {
+                        setCalViewMonth(1);
+                        setCalViewYear(calViewYear + 1);
+                      } else {
+                        setCalViewMonth(calViewMonth + 1);
+                      }
+                    }}
+                    className="p-1 hover:bg-slate-100 rounded-lg text-slate-600 cursor-pointer"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Day of Week Headers (อา. - ส.) */}
+                <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-500 mb-1">
+                  <span className="text-rose-500">อา.</span>
+                  <span className="text-amber-700 bg-amber-100/60 rounded py-0.5">จ.</span>
+                  <span>อ.</span>
+                  <span>พ.</span>
+                  <span>พฤ.</span>
+                  <span>ศ.</span>
+                  <span className="text-rose-400">ส.</span>
+                </div>
+
+                {/* Days Grid */}
+                <div className="grid grid-cols-7 gap-1 text-center text-xs">
+                  {calendarDays.map((item, idx) => {
+                    const isMon = item.isMonday;
+                    const isSel = item.isSelected;
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setSelectedDate(item.dateStr);
+                          setIsCalendarOpen(false);
+                        }}
+                        className={`relative py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer flex flex-col items-center justify-center ${
+                          isSel
+                            ? 'bg-orange-600 text-white font-bold shadow-xs'
+                            : item.isCurrentMonth
+                            ? isMon
+                              ? 'bg-amber-100/70 text-amber-950 hover:bg-amber-200/80 font-semibold'
+                              : 'hover:bg-slate-100 text-slate-800'
+                            : 'text-slate-300 hover:text-slate-500'
+                        }`}
+                      >
+                        <span>{item.day}</span>
+                        {/* Green indicator dot for days with recorded menus */}
+                        {item.hasMenu && (
+                          <span className={`w-1 h-1 rounded-full mt-0.5 ${
+                            isSel ? 'bg-white' : 'bg-emerald-500'
+                          }`} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Popover Footer */}
+                <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate(todayStr);
+                      setIsCalendarOpen(false);
+                    }}
+                    className="text-orange-600 hover:text-orange-800 font-semibold cursor-pointer"
+                  >
+                    เลือกวันนี้ ({formatThaiDisplay(todayStr).split(' ')[1] || 'วันนี้'})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsCalendarOpen(false)}
+                    className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    ปิด
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* Native HTML5 Date Picker as Accessible Alternative */}
+          <div className="relative">
+            <input
+              id="input-native-date-picker"
+              type="date"
+              value={selectedDate}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setSelectedDate(e.target.value);
+                }
+              }}
+              className="text-xs bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl px-2 py-1.5 text-slate-700 cursor-pointer focus:ring-2 focus:ring-orange-500"
+              title="เลือกวันที่จากปฏิทินของเบราว์เซอร์"
+            />
+          </div>
+
+          {/* Next day button */}
           <button
             id="btn-next-day"
             type="button"
@@ -281,27 +766,46 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
             className="p-2 text-slate-600 hover:text-orange-600 hover:bg-orange-50 rounded-xl border border-slate-200 transition-colors cursor-pointer"
             title="วันถัดไป"
           >
-            <ChevronRight className="w-5 h-5" />
+            <ChevronRight className="w-4 h-4" />
           </button>
         </div>
 
-        {dailyMenus.some((m) => m.date === selectedDate) && (
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            <span>บันทึกแล้ว</span>
-          </span>
-        )}
+        {/* Quick today & status badges */}
+        <div className="flex items-center gap-2">
+          {selectedDate !== todayStr && (
+            <button
+              type="button"
+              onClick={() => setSelectedDate(todayStr)}
+              className="text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+            >
+              กลับสู่วันนี้
+            </button>
+          )}
+
+          {dailyMenus.some((m) => m.date === selectedDate) ? (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>บันทึกแล้ว</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center text-xs font-medium text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
+              ยังไม่มีเมนูวันนี้
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Main Form: Food Items Form */}
+      {/* ------------------------------------------------------------- */}
+      {/* 3. Main Daily Menu Form                                       */}
+      {/* ------------------------------------------------------------- */}
       <form onSubmit={handleSave} className="bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-6 shadow-xs space-y-4.5">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-base font-bold text-slate-900">
-              รายการอาหาร
+              รายการอาหารประจำวัน
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              พิมพ์เพื่อค้นหาอัตโนมัติ (Auto-suggest) หรือคลิกเลือกจากคลังเมนูด้านล่าง
+              พิมพ์ชื่อเมนู หรือคลิกเลือกจากคลังเมนูด้านล่าง
             </p>
           </div>
           {dailyMenus.some((m) => m.date === selectedDate) && (
@@ -312,25 +816,46 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           )}
         </div>
 
-        {/* 1. ข้าว */}
+        {/* 1. ข้าว (Disabled if singleDish has value) */}
         <div className="relative">
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
               1. ข้าว
+              {hasSingleDish && (
+                <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
+                  (ปิดไม่ให้พิมพ์ เนื่องจากระบุอาหารจานเดียวแล้ว)
+                </span>
+              )}
             </label>
             <span className="text-[10px] text-slate-400">เช่น ข้าวสวย ข้าวกล้อง ข้าวไรซ์เบอร์รี่</span>
           </div>
           <input
             id="input-menu-rice"
             type="text"
-            placeholder="พิมพ์ชื่อข้าว เช่น ข้าวสวยหอมมะลิใหม่..."
+            placeholder={hasSingleDish ? "ปิดไม่ให้พิมพ์ (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "พิมพ์ชื่อข้าว เช่น ข้าวสวยหอมมะลิใหม่..."}
             value={rice}
-            onChange={(e) => setRice(e.target.value)}
-            onFocus={() => setActiveSuggestField('rice')}
-            className="w-full px-3.5 py-2 text-xs bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+            disabled={hasSingleDish}
+            onChange={(e) => {
+              const val = e.target.value;
+              setRice(val);
+              if (val.trim()) {
+                setSingleDish('');
+                if (activeSuggestField === 'singleDish') {
+                  setActiveSuggestField(null);
+                }
+              }
+            }}
+            onFocus={() => {
+              if (!hasSingleDish) setActiveSuggestField('rice');
+            }}
+            className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
+              hasSingleDish
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+            }`}
           />
-          {activeSuggestField === 'rice' && (
+          {!hasSingleDish && activeSuggestField === 'rice' && (
             <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-amber-50/70 border border-amber-200 rounded-xl">
               <span className="text-[10px] font-semibold text-amber-900 w-full mb-0.5 flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-amber-600" /> แนะนำจากคลัง:
@@ -341,6 +866,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                   type="button"
                   onClick={() => {
                     setRice(item.menuName);
+                    setSingleDish('');
                     setActiveSuggestField(null);
                   }}
                   className="text-[11px] bg-white text-slate-700 hover:text-amber-800 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-200/80 transition-colors cursor-pointer"
@@ -352,25 +878,45 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           )}
         </div>
 
-        {/* 2. อาหารจานเดียว */}
+        {/* 2. อาหารจานเดียว (Disabled if rice has value) */}
         <div className="relative">
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span>
               2. อาหารจานเดียว
+              {hasRice && (
+                <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
+                  (ปิดไม่ให้พิมพ์อัตโนมัติ เนื่องจากระบุข้าวแล้ว)
+                </span>
+              )}
             </label>
-            <span className="text-[10px] text-slate-400">เช่น ข้าวมันไก่ ก๋วยเตี๋ยว ผัดซีอิ๊ว</span>
+            <span className="text-[10px] text-slate-400">เช่น ข้าวมันไก่ ก๋วยเตี๋ยว ผัดซีอิ๊ว (วันพุธ)</span>
           </div>
           <input
             id="input-menu-single-dish"
             type="text"
-            placeholder="พิมพ์ชื่ออาหารจานเดียว เช่น ข้าวมันไก่ตอนสูตรอนามัย..."
+            placeholder={hasRice ? "ปิดไม่ให้พิมพ์อัตโนมัติ (เนื่องจากระบุรายการข้าวแล้ว)" : "พิมพ์ชื่ออาหารจานเดียว เช่น ข้าวมันไก่ตอนสูตรอนามัย..."}
             value={singleDish}
-            onChange={(e) => setSingleDish(e.target.value)}
-            onFocus={() => setActiveSuggestField('singleDish')}
-            className="w-full px-3.5 py-2 text-xs bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+            disabled={hasRice}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSingleDish(val);
+              if (val.trim()) {
+                setRice('');
+                setNonSpicy('');
+                setSpicy('');
+              }
+            }}
+            onFocus={() => {
+              if (!hasRice) setActiveSuggestField('singleDish');
+            }}
+            className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
+              hasRice
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+            }`}
           />
-          {activeSuggestField === 'singleDish' && (
+          {!hasRice && activeSuggestField === 'singleDish' && (
             <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-orange-50/70 border border-orange-200 rounded-xl">
               <span className="text-[10px] font-semibold text-orange-900 w-full mb-0.5 flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-orange-600" /> แนะนำจากคลัง:
@@ -381,6 +927,9 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                   type="button"
                   onClick={() => {
                     setSingleDish(item.menuName);
+                    setRice('');
+                    setNonSpicy('');
+                    setSpicy('');
                     setActiveSuggestField(null);
                   }}
                   className="text-[11px] bg-white text-slate-700 hover:text-orange-800 hover:bg-orange-100 px-2.5 py-1 rounded-lg border border-orange-200/80 transition-colors cursor-pointer"
@@ -392,25 +941,37 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           )}
         </div>
 
-        {/* 3. อาหารไม่เผ็ด */}
+        {/* 3. อาหารไม่เผ็ด (Disabled if singleDish has value) */}
         <div className="relative">
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
               3. อาหารไม่เผ็ด
+              {hasSingleDish && (
+                <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
+                  (ปิดไม่ให้พิมพ์ เนื่องจากระบุอาหารจานเดียวแล้ว)
+                </span>
+              )}
             </label>
             <span className="text-[10px] text-slate-400">เช่น ต้มจืดเต้าหู้หมูสับ ไข่พะโล้ ไก่ทอด</span>
           </div>
           <input
             id="input-menu-non-spicy"
             type="text"
-            placeholder="พิมพ์ชื่ออาหารไม่เผ็ด เช่น ต้มจืดเต้าหู้หมูสับสาหร่ายวากาเมะ..."
+            placeholder={hasSingleDish ? "ปิดไม่ให้พิมพ์ (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "พิมพ์ชื่ออาหารไม่เผ็ด เช่น ต้มจืดเต้าหู้หมูสับสาหร่ายวากาเมะ..."}
             value={nonSpicy}
+            disabled={hasSingleDish}
             onChange={(e) => setNonSpicy(e.target.value)}
-            onFocus={() => setActiveSuggestField('nonSpicy')}
-            className="w-full px-3.5 py-2 text-xs bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+            onFocus={() => {
+              if (!hasSingleDish) setActiveSuggestField('nonSpicy');
+            }}
+            className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
+              hasSingleDish
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500'
+            }`}
           />
-          {activeSuggestField === 'nonSpicy' && (
+          {!hasSingleDish && activeSuggestField === 'nonSpicy' && (
             <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-emerald-50/70 border border-emerald-200 rounded-xl">
               <span className="text-[10px] font-semibold text-emerald-900 w-full mb-0.5 flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-emerald-600" /> แนะนำจากคลัง:
@@ -432,25 +993,37 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           )}
         </div>
 
-        {/* 4. อาหารเผ็ด */}
+        {/* 4. อาหารเผ็ด (Disabled if singleDish has value) */}
         <div className="relative">
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
               4. อาหารเผ็ด
+              {hasSingleDish && (
+                <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
+                  (ปิดไม่ให้พิมพ์ เนื่องจากระบุอาหารจานเดียวแล้ว)
+                </span>
+              )}
             </label>
             <span className="text-[10px] text-slate-400">เช่น ผัดกะเพราหมูสับ แกงเขียวหวานไก่ ผัดพริกแกง</span>
           </div>
           <input
             id="input-menu-spicy"
             type="text"
-            placeholder="พิมพ์ชื่ออาหารเผ็ด เช่น ผัดกะเพราหมูสับใบกะเพราบ้าน..."
+            placeholder={hasSingleDish ? "ปิดไม่ให้พิมพ์ (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "พิมพ์ชื่ออาหารเผ็ด เช่น ผัดกะเพราหมูสับใบกะเพราบ้าน..."}
             value={spicy}
+            disabled={hasSingleDish}
             onChange={(e) => setSpicy(e.target.value)}
-            onFocus={() => setActiveSuggestField('spicy')}
-            className="w-full px-3.5 py-2 text-xs bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500 transition-all"
+            onFocus={() => {
+              if (!hasSingleDish) setActiveSuggestField('spicy');
+            }}
+            className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
+              hasSingleDish
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500'
+            }`}
           />
-          {activeSuggestField === 'spicy' && (
+          {!hasSingleDish && activeSuggestField === 'spicy' && (
             <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-rose-50/70 border border-rose-200 rounded-xl">
               <span className="text-[10px] font-semibold text-rose-900 w-full mb-0.5 flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-rose-600" /> แนะนำจากคลัง:
@@ -472,19 +1045,19 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           )}
         </div>
 
-        {/* 5. ผลไม้-ของหวาน */}
+        {/* 5. ผลไม้-ของหวาน (Requirement 4: Supports both ผลไม้ and ของหวาน) */}
         <div className="relative">
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span>
               5. ผลไม้-ของหวาน
             </label>
-            <span className="text-[10px] text-slate-400">เช่น แตงโม กล้วยน้ำว้า สับปะรด บัวลอย</span>
+            <span className="text-[10px] text-slate-400">ดึงได้ทั้งหมวดผลไม้และของหวาน เช่น แตงโม กล้วยน้ำว้า บัวลอย</span>
           </div>
           <input
             id="input-menu-dessert"
             type="text"
-            placeholder="พิมพ์ชื่อผลไม้-ของหวาน เช่น แตงโมกินรีหวานฉ่ำ..."
+            placeholder="พิมพ์ชื่อผลไม้หรือของหวาน เช่น แตงโมกินรี หรือ บัวลอยเผือก..."
             value={dessert}
             onChange={(e) => setDessert(e.target.value)}
             onFocus={() => setActiveSuggestField('dessert')}
@@ -493,26 +1066,34 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           {activeSuggestField === 'dessert' && (
             <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-purple-50/70 border border-purple-200 rounded-xl">
               <span className="text-[10px] font-semibold text-purple-900 w-full mb-0.5 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-purple-600" /> แนะนำจากคลัง:
+                <Sparkles className="w-3 h-3 text-purple-600" /> แนะนำจากคลัง (ผลไม้ และ ของหวาน):
               </span>
-              {getSuggestions('ผลไม้-ของหวาน', dessert).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setDessert(item.menuName);
-                    setActiveSuggestField(null);
-                  }}
-                  className="text-[11px] bg-white text-slate-700 hover:text-purple-800 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200/80 transition-colors cursor-pointer"
-                >
-                  + {item.menuName}
-                </button>
-              ))}
+              {getDessertSuggestions(dessert).map((item) => {
+                const isDessert = item.category === 'ของหวาน' || item.menuName.includes('หวาน') || item.menuName.includes('บัวลอย') || item.menuName.includes('กล้วยบวชชี');
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setDessert(item.menuName);
+                      setActiveSuggestField(null);
+                    }}
+                    className="text-[11px] bg-white text-slate-700 hover:text-purple-800 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200/80 transition-colors cursor-pointer flex items-center gap-1"
+                  >
+                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                      isDessert ? 'bg-purple-100 text-purple-700' : 'bg-teal-100 text-teal-700'
+                    }`}>
+                      {isDessert ? 'ของหวาน' : 'ผลไม้'}
+                    </span>
+                    <span>{item.menuName}</span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* Note / Remarks - starts with empty field */}
+        {/* Note / Remarks */}
         <div>
           <label className="block text-xs font-bold text-slate-700 mb-1">
             หมายเหตุ / บันทึกเพิ่มเติม
@@ -559,7 +1140,9 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
         </div>
       </form>
 
-      {/* Calendar Summary Table of Saved Menus */}
+      {/* ------------------------------------------------------------- */}
+      {/* 4. Calendar Summary Table of Saved Menus                      */}
+      {/* ------------------------------------------------------------- */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -587,20 +1170,41 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
             <tbody className="divide-y divide-slate-100">
               {dailyMenus.map((entry) => {
                 const isCurrent = entry.date === selectedDate;
+                const parts = entry.date.split('-').map(Number);
+                const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                const isMonday = d.getDay() === 1;
+
                 return (
                   <tr
                     key={entry.date}
                     onClick={() => handleEditEntry(entry)}
                     className={`cursor-pointer transition-colors ${
-                      isCurrent ? 'bg-orange-50/90 font-medium' : 'hover:bg-slate-50'
+                      isCurrent
+                        ? 'bg-orange-100/60 font-medium'
+                        : isMonday
+                        ? 'bg-amber-50/50 hover:bg-amber-100/40'
+                        : 'hover:bg-slate-50'
                     }`}
                   >
                     <td className="py-2.5 px-3 whitespace-nowrap">
-                      <div className="font-semibold text-slate-900">{formatThaiDisplay(entry.date)}</div>
+                      <div className="font-semibold text-slate-900 flex items-center gap-1.5">
+                        {isMonday && (
+                          <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="วันจันทร์ (เริ่มต้นสัปดาห์)" />
+                        )}
+                        <span>{formatThaiDisplay(entry.date)}</span>
+                      </div>
                       <div className="text-[10px] text-slate-400">{entry.date}</div>
                     </td>
                     <td className="py-2.5 px-3 max-w-[180px] truncate text-slate-700">
-                      {entry.singleDish || entry.rice || '-'}
+                      {entry.singleDish ? (
+                        <span className="font-medium text-orange-800">
+                          [จานเดียว] {entry.singleDish}
+                        </span>
+                      ) : entry.rice ? (
+                        entry.rice
+                      ) : (
+                        '-'
+                      )}
                     </td>
                     <td className="py-2.5 px-3 max-w-[220px] truncate text-slate-700">
                       {[entry.nonSpicy, entry.spicy].filter(Boolean).join(' + ') || '-'}
@@ -616,7 +1220,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                         className="flex items-center justify-end gap-1"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {/* ไอคอน คัดลอก (ไปใส่ตรงรายการอาหารเลย) */}
+                        {/* Copy icon */}
                         <button
                           type="button"
                           id={`btn-copy-to-form-${entry.date}`}
@@ -627,7 +1231,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                           <Copy className="w-4 h-4" />
                         </button>
 
-                        {/* ไอคอน แก้ไข */}
+                        {/* Edit icon */}
                         <button
                           type="button"
                           id={`btn-edit-entry-${entry.date}`}
@@ -638,7 +1242,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                           <Pencil className="w-4 h-4" />
                         </button>
 
-                        {/* ไอคอน ลบ */}
+                        {/* Delete icon */}
                         <button
                           type="button"
                           id={`btn-delete-entry-${entry.date}`}

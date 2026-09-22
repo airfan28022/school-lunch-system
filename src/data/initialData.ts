@@ -40,14 +40,20 @@ export const INITIAL_MENU_BANK: MenuItem[] = [
   { id: 'mb-21', category: 'อาหารเผ็ด', menuName: 'ผัดพริกแกงถั่วฝักยาวหมูสามชั้น', createdAt: '2026-09-01' },
   { id: 'mb-22', category: 'อาหารเผ็ด', menuName: 'ต้มยำน้ำใสไก่บ้านเห็ดฟาง (รสกลมกล่อม)', createdAt: '2026-09-01' },
 
-  // ผลไม้-ของหวาน
-  { id: 'mb-23', category: 'ผลไม้-ของหวาน', menuName: 'กล้วยน้ำว้าอินทรีย์สวนโรงเรียน', createdAt: '2026-09-01' },
-  { id: 'mb-24', category: 'ผลไม้-ของหวาน', menuName: 'แตงโมกินรีหวานฉ่ำหั่นชิ้นพอดีคำ', createdAt: '2026-09-01' },
-  { id: 'mb-25', category: 'ผลไม้-ของหวาน', menuName: 'สับปะรดภูแลกรอบหวานฉ่ำ', createdAt: '2026-09-01' },
-  { id: 'mb-26', category: 'ผลไม้-ของหวาน', menuName: 'บัวลอยเผือกมะพร้าวอ่อนกะทิสดหวานน้อย', createdAt: '2026-09-01' },
-  { id: 'mb-27', category: 'ผลไม้-ของหวาน', menuName: 'กล้วยบวชชีงาขาวคั่วหอมกรุ่น', createdAt: '2026-09-01' },
-  { id: 'mb-28', category: 'ผลไม้-ของหวาน', menuName: 'ฝรั่งกิมจูสดกรอบหั่นชิ้น', createdAt: '2026-09-01' },
-  { id: 'mb-29', category: 'ผลไม้-ของหวาน', menuName: 'เฉาก๊วยโบราณน้ำตาลทรายแดงใส่น้ำแข็ง', createdAt: '2026-09-01' }
+  // ผลไม้
+  { id: 'mb-23', category: 'ผลไม้', menuName: 'กล้วยน้ำว้าอินทรีย์สวนโรงเรียน', createdAt: '2026-09-01' },
+  { id: 'mb-24', category: 'ผลไม้', menuName: 'แตงโมกินรีหวานฉ่ำหั่นชิ้นพอดีคำ', createdAt: '2026-09-01' },
+  { id: 'mb-25', category: 'ผลไม้', menuName: 'สับปะรดภูแลกรอบหวานฉ่ำ', createdAt: '2026-09-01' },
+  { id: 'mb-28', category: 'ผลไม้', menuName: 'ฝรั่งกิมจูสดกรอบหั่นชิ้น', createdAt: '2026-09-01' },
+  { id: 'mb-30', category: 'ผลไม้', menuName: 'ส้มสายน้ำผึ้งแกะเปลือก', createdAt: '2026-09-01' },
+  { id: 'mb-31', category: 'ผลไม้', menuName: 'มะละกอสุกหวานหั่นชิ้น', createdAt: '2026-09-01' },
+
+  // ของหวาน
+  { id: 'mb-26', category: 'ของหวาน', menuName: 'บัวลอยเผือกมะพร้าวอ่อนกะทิสดหวานน้อย', createdAt: '2026-09-01' },
+  { id: 'mb-27', category: 'ของหวาน', menuName: 'กล้วยบวชชีงาขาวคั่วหอมกรุ่น', createdAt: '2026-09-01' },
+  { id: 'mb-29', category: 'ของหวาน', menuName: 'เฉาก๊วยโบราณน้ำตาลทรายแดงใส่น้ำแข็ง', createdAt: '2026-09-01' },
+  { id: 'mb-32', category: 'ของหวาน', menuName: 'ถั่วเขียวต้มน้ำตาลทรายแดงหวานน้อย', createdAt: '2026-09-01' },
+  { id: 'mb-33', category: 'ของหวาน', menuName: 'วุ้นกะทิใบเตยหอมสดชื่น', createdAt: '2026-09-01' }
 ];
 
 export const INITIAL_DAILY_MENUS: DailyMenuEntry[] = [

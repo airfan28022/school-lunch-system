@@ -22,17 +22,18 @@ interface MenuRepositoryProps {
   onSeedPresets: () => void;
 }
 
-// 5 Strict Categories
+// 6 Strict Categories
 const STRICT_CATEGORIES: MenuCategory[] = [
   'ข้าว',
   'อาหารจานเดียว',
   'อาหารไม่เผ็ด',
   'อาหารเผ็ด',
-  'ผลไม้-ของหวาน'
+  'ผลไม้',
+  'ของหวาน'
 ];
 
 // Aesthetic category card themes
-const CATEGORY_THEMES: Record<MenuCategory, {
+const CATEGORY_THEMES: Record<string, {
   headerBg: string;
   headerBorder: string;
   headerText: string;
@@ -82,6 +83,26 @@ const CATEGORY_THEMES: Record<MenuCategory, {
     hoverBg: 'hover:bg-rose-50/80',
     addBtnHover: 'hover:bg-rose-100 text-rose-700'
   },
+  'ผลไม้': {
+    headerBg: 'bg-teal-500/10',
+    headerBorder: 'border-teal-200',
+    headerText: 'text-teal-900',
+    badgeBg: 'bg-teal-100',
+    badgeText: 'text-teal-800',
+    cardBorder: 'border-teal-200/80',
+    hoverBg: 'hover:bg-teal-50/80',
+    addBtnHover: 'hover:bg-teal-100 text-teal-700'
+  },
+  'ของหวาน': {
+    headerBg: 'bg-purple-500/10',
+    headerBorder: 'border-purple-200',
+    headerText: 'text-purple-900',
+    badgeBg: 'bg-purple-100',
+    badgeText: 'text-purple-800',
+    cardBorder: 'border-purple-200/80',
+    hoverBg: 'hover:bg-purple-50/80',
+    addBtnHover: 'hover:bg-purple-100 text-purple-700'
+  },
   'ผลไม้-ของหวาน': {
     headerBg: 'bg-purple-500/10',
     headerBorder: 'border-purple-200',
@@ -122,37 +143,64 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
 
   // Grouped items by strict categories
   const categorizedMenus = useMemo(() => {
-    const result: Record<MenuCategory, MenuItem[]> = {
+    const result: Record<string, MenuItem[]> = {
       'ข้าว': [],
       'อาหารจานเดียว': [],
       'อาหารไม่เผ็ด': [],
       'อาหารเผ็ด': [],
-      'ผลไม้-ของหวาน': []
+      'ผลไม้': [],
+      'ของหวาน': []
     };
 
     const cleanQuery = searchQuery.trim().toLowerCase();
 
     menuBank.forEach((item) => {
-      if (result[item.category]) {
+      let targetCat: string = item.category;
+      if (targetCat === 'ผลไม้-ของหวาน') {
+        const name = item.menuName.toLowerCase();
+        if (name.includes('กล้วยบวชชี') || name.includes('บัวลอย') || name.includes('เฉาก๊วย') || name.includes('หวาน') || name.includes('ถั่วเขียว') || name.includes('วุ้น')) {
+          targetCat = 'ของหวาน';
+        } else {
+          targetCat = 'ผลไม้';
+        }
+      }
+
+      if (result[targetCat]) {
         const matchSearch = cleanQuery === '' || 
           item.menuName.toLowerCase().includes(cleanQuery) ||
           item.category.toLowerCase().includes(cleanQuery);
         
         if (matchSearch) {
-          result[item.category].push(item);
+          result[targetCat].push(item);
         }
       }
     });
 
-    return result;
+    return result as Record<MenuCategory, MenuItem[]>;
   }, [menuBank, searchQuery]);
 
   // Counts by category
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { ALL: menuBank.length };
     STRICT_CATEGORIES.forEach((cat) => {
-      counts[cat] = menuBank.filter((m) => m.category === cat).length;
+      counts[cat] = 0;
     });
+
+    menuBank.forEach((item) => {
+      let cat: string = item.category;
+      if (cat === 'ผลไม้-ของหวาน') {
+        const name = item.menuName.toLowerCase();
+        if (name.includes('กล้วยบวชชี') || name.includes('บัวลอย') || name.includes('เฉาก๊วย') || name.includes('หวาน') || name.includes('ถั่วเขียว') || name.includes('วุ้น')) {
+          cat = 'ของหวาน';
+        } else {
+          cat = 'ผลไม้';
+        }
+      }
+      if (counts[cat] !== undefined) {
+        counts[cat] += 1;
+      }
+    });
+
     return counts;
   }, [menuBank]);
 
@@ -231,7 +279,7 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                จัดหมวดหมู่ 5 ประเภทหลัก รายการกระชับ สะอาดตา และค้นหาง่าย
+                จัดหมวดหมู่ 6 ประเภทหลัก: ข้าว, อาหารจานเดียว, อาหารไม่เผ็ด, อาหารเผ็ด, ผลไม้ และของหวาน
               </p>
             </div>
           </div>

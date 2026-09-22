@@ -261,6 +261,28 @@ export default function App() {
     return true;
   };
 
+  const handleBatchSaveDailyMenus = async (entries: DailyMenuEntry[]): Promise<boolean> => {
+    const map = new Map(dailyMenus.map((m) => [m.date, m]));
+    entries.forEach((e) => map.set(e.date, e));
+    const updated = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+    setDailyMenus(updated);
+
+    if (settings.gasWebAppUrl) {
+      try {
+        for (const entry of entries) {
+          await callGasPost(settings.gasWebAppUrl, {
+            action: 'saveDailyMenu',
+            data: entry
+          });
+        }
+      } catch (err) {
+        console.warn('GAS batchSaveDailyMenus warning:', err);
+      }
+    }
+
+    return true;
+  };
+
   const handleDeleteDailyMenu = async (dateStr: string) => {
     if (!window.confirm(`คุณต้องการลบข้อมูลเมนูอาหารของวันที่ ${dateStr} ใช่หรือไม่?`)) {
       return;
@@ -391,6 +413,7 @@ export default function App() {
             dailyMenus={dailyMenus}
             menuBank={menuBank}
             onSaveDailyMenu={handleSaveDailyMenu}
+            onBatchSaveDailyMenus={handleBatchSaveDailyMenus}
             onDeleteDailyMenu={handleDeleteDailyMenu}
             onOpenLightbox={handleOpenLightbox}
             showToast={showToast}
@@ -414,6 +437,9 @@ export default function App() {
             dailyMenus={dailyMenus}
             settings={settings}
             showToast={showToast}
+            menuBank={menuBank}
+            onSaveDailyMenu={handleSaveDailyMenu}
+            onDeleteDailyMenu={handleDeleteDailyMenu}
           />
         )}
 

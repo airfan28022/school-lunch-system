@@ -8,6 +8,8 @@ export type MenuCategory =
   | 'อาหารจานเดียว'
   | 'อาหารไม่เผ็ด'
   | 'อาหารเผ็ด'
+  | 'ผลไม้'
+  | 'ของหวาน'
   | 'ผลไม้-ของหวาน';
 
 export const MENU_CATEGORIES: { id: MenuCategory; label: string; icon: string; badgeColor: string; description: string }[] = [
@@ -40,11 +42,18 @@ export const MENU_CATEGORIES: { id: MenuCategory; label: string; icon: string; b
     description: 'แกงเขียวหวานไก่ ผัดกะเพรา แกงเผ็ดหมู'
   },
   {
-    id: 'ผลไม้-ของหวาน',
-    label: 'ผลไม้-ของหวาน',
+    id: 'ผลไม้',
+    label: 'ผลไม้',
     icon: 'nutrition',
+    badgeColor: 'bg-teal-100 text-teal-800 border-teal-300',
+    description: 'กล้วยน้ำว้า แตงโม สับปะรด ฝรั่ง ส้ม มะละกอ'
+  },
+  {
+    id: 'ของหวาน',
+    label: 'ของหวาน',
+    icon: 'cake',
     badgeColor: 'bg-purple-100 text-purple-800 border-purple-300',
-    description: 'กล้วยน้ำว้า แตงโม บัวลอย กล้วยบวชชี'
+    description: 'บัวลอย กล้วยบวชชี เฉาก๊วย ถั่วเขียวต้ม วุ้นกะทิ'
   }
 ];
 
