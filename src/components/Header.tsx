@@ -106,7 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
                   {settings.schoolName || 'ระบบบริหารจัดการอาหารกลางวันโรงเรียน'}
                 </h1>
                 <p className="text-xs font-semibold text-slate-800 line-clamp-1">
-                  {settings.department || 'สังกัดสำนักการศึกษา'} &bull; ผู้รับผิดชอบ: <span className="text-slate-900 font-bold">{settings.managerName || 'หัวหน้างานโภชนาการ'}</span>
+                  {settings.department || 'สังกัดสำนักการศึกษา'}
                 </p>
               </div>
             </div>

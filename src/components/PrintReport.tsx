@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { DailyMenuEntry, SchoolSettings, MenuItem } from '../types';
+import { ConfirmModal } from './ConfirmModal';
 import { 
   Printer, 
   Search, 
@@ -52,6 +53,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   // Add New Date Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [newDateStr, setNewDateStr] = useState<string>('');
+  const [deletingDateStr, setDeletingDateStr] = useState<string | null>(null);
 
   const THAI_MONTHS = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -159,15 +161,20 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   };
 
   // Delete row
-  const handleDeleteRow = async (dateStr: string) => {
-    if (window.confirm(`ยืนยันการลบรายการอาหารวันที่ ${formatShortDate(dateStr)} หรือไม่?`)) {
-      if (onDeleteDailyMenu) {
-        await onDeleteDailyMenu(dateStr);
-        showToast('ลบรายการสำเร็จ', `ลบเมนูวันที่ ${formatShortDate(dateStr)} เรียบร้อยแล้ว`, 'info');
-      }
-      if (editingEntry?.date === dateStr) {
-        setEditingEntry(null);
-      }
+  const handleDeleteRow = (dateStr: string) => {
+    setDeletingDateStr(dateStr);
+  };
+
+  const executeDeleteRow = async () => {
+    if (!deletingDateStr) return;
+    const targetDate = deletingDateStr;
+    setDeletingDateStr(null);
+    if (onDeleteDailyMenu) {
+      await onDeleteDailyMenu(targetDate);
+      showToast('ลบรายการสำเร็จ', `ลบเมนูวันที่ ${formatShortDate(targetDate)} เรียบร้อยแล้ว`, 'info');
+    }
+    if (editingEntry?.date === targetDate) {
+      setEditingEntry(null);
     }
   };
 
@@ -865,6 +872,17 @@ export const PrintReport: React.FC<PrintReportProps> = ({
           </div>
         </div>
       )}
+      {/* Confirm Delete Entry Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deletingDateStr)}
+        title="ยืนยันการลบรายการอาหาร"
+        message={deletingDateStr ? `คุณต้องการลบข้อมูลเมนูอาหารประจำวันที่ ${formatShortDate(deletingDateStr)} ใช่หรือไม่?` : ''}
+        confirmText="ยืนยันการลบ"
+        cancelText="ยกเลิก"
+        type="danger"
+        onConfirm={executeDeleteRow}
+        onCancel={() => setDeletingDateStr(null)}
+      />
     </div>
   );
 };

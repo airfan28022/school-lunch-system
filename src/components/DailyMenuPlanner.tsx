@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DailyMenuEntry, MenuItem, ActivityPhoto, MenuCategory } from '../types';
 import { INITIAL_MENU_BANK } from '../data/initialData';
+import { ConfirmModal } from './ConfirmModal';
 import { 
   Calendar as CalendarIcon, 
   ChevronLeft, 
@@ -110,6 +111,10 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
 
   // Predictive Auto-suggest state for the 5 fields
   const [activeSuggestField, setActiveSuggestField] = useState<string | null>(null);
+
+  // Minimal Confirmation Dialog States
+  const [deleteConfirmDate, setDeleteConfirmDate] = useState<string | null>(null);
+  const [randomizeConfirmData, setRandomizeConfirmData] = useState<{ count: number; total: number } | null>(null);
 
   // Load existing menu data whenever selectedDate changes
   useEffect(() => {
@@ -240,9 +245,22 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
 
   // Action: Delete entry
   const handleDeleteEntry = (dateStr: string) => {
-    if (window.confirm(`ยืนยันการลบรายการอาหารวันที่ ${formatThaiDisplay(dateStr)} หรือไม่?`)) {
-      onDeleteDailyMenu(dateStr);
-      showToast('ลบรายการสำเร็จ', `ลบรายการอาหารวันที่ ${formatThaiDisplay(dateStr)} เรียบร้อยแล้ว`, 'info');
+    setDeleteConfirmDate(dateStr);
+  };
+
+  const executeDeleteEntry = async () => {
+    if (!deleteConfirmDate) return;
+    const targetDate = deleteConfirmDate;
+    setDeleteConfirmDate(null);
+    await onDeleteDailyMenu(targetDate);
+    showToast('ลบรายการสำเร็จ', `ลบรายการอาหารวันที่ ${formatThaiDisplay(targetDate)} เรียบร้อยแล้ว`, 'info');
+    if (selectedDate === targetDate) {
+      setRice('');
+      setSingleDish('');
+      setSpicy('');
+      setNonSpicy('');
+      setDessert('');
+      setNote('');
     }
   };
 
@@ -285,7 +303,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   // - Dessert: 2 days per week
   // - Remaining days: Fruit
   // -------------------------------------------------------------------------
-  const handleRandomizeMonth = async () => {
+  const executeRandomizeMonth = async () => {
     setIsRandomizing(true);
     try {
       // 1. Pull directly from menuBank (คลังเมนู), with intelligent category fallback
@@ -334,18 +352,6 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
       }
       if (currentWeek.length > 0) {
         schoolDaysByWeek.push({ weekNumber: schoolDaysByWeek.length + 1, dates: currentWeek });
-      }
-
-      const totalSchoolDays = schoolDaysByWeek.reduce((sum, w) => sum + w.dates.length, 0);
-
-      // Check for existing entries in this month
-      const monthPrefix = `${randomYear}-${String(randomMonth).padStart(2, '0')}`;
-      const existingInMonth = dailyMenus.filter((m) => m.date.startsWith(monthPrefix));
-      if (existingInMonth.length > 0) {
-        const confirmMsg = `พบเมนูในเดือน ${THAI_MONTH_NAMES[randomMonth - 1]} ${randomYear + 543} บันทึกอยู่แล้ว ${existingInMonth.length} วัน\n\nต้องการสุ่มจัดเมนูใหม่แทนที่ทั้งหมด (${totalSchoolDays} วันทำการ) หรือไม่?`;
-        if (!window.confirm(confirmMsg)) {
-          return;
-        }
       }
 
       // Random picker helper avoiding immediate repeat
@@ -503,6 +509,30 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
     } finally {
       setIsRandomizing(false);
     }
+  };
+
+  const handleRandomizeMonth = () => {
+    // Count school days in this month
+    const daysInMonth = new Date(randomYear, randomMonth, 0).getDate();
+    let totalSchoolDays = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(randomYear, randomMonth - 1, day);
+      if (d.getDay() >= 1 && d.getDay() <= 5) {
+        totalSchoolDays++;
+      }
+    }
+
+    const monthPrefix = `${randomYear}-${String(randomMonth).padStart(2, '0')}`;
+    const existingInMonth = dailyMenus.filter((m) => m.date.startsWith(monthPrefix));
+    if (existingInMonth.length > 0) {
+      setRandomizeConfirmData({
+        count: existingInMonth.length,
+        total: totalSchoolDays
+      });
+      return;
+    }
+
+    executeRandomizeMonth();
   };
 
   // -------------------------------------------------------------------------
@@ -841,296 +871,303 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           )}
         </div>
 
-        {/* 1. ข้าว (Disabled if singleDish has value) */}
-        <div className="relative">
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
-              1. ข้าว
-              {hasSingleDish && (
-                <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
-                  (ปิดไม่ให้พิมพ์ เนื่องจากระบุอาหารจานเดียวแล้ว)
-                </span>
-              )}
-            </label>
-            <span className="text-[10px] text-slate-400">เช่น ข้าวสวย ข้าวกล้อง ข้าวไรซ์เบอร์รี่</span>
-          </div>
-          <input
-            id="input-menu-rice"
-            type="text"
-            placeholder={hasSingleDish ? "ปิดไม่ให้พิมพ์ (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "พิมพ์ชื่อข้าว เช่น ข้าวสวยหอมมะลิใหม่..."}
-            value={rice}
-            disabled={hasSingleDish}
-            onChange={(e) => {
-              const val = e.target.value;
-              setRice(val);
-              if (val.trim()) {
-                setSingleDish('');
-                if (activeSuggestField === 'singleDish') {
-                  setActiveSuggestField(null);
+        {/* 2-Column Form Grid for Menu Input Fields */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+          {/* 1. ข้าว (Disabled if singleDish has value) */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                1. ข้าว
+                {hasSingleDish && (
+                  <span className="text-[10px] text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded-md border border-rose-200 font-semibold ml-1">
+                    (ปิดไม่ให้พิมพ์)
+                  </span>
+                )}
+              </label>
+              <span className="text-[10px] text-slate-400">เช่น ข้าวสวย ข้าวกล้อง</span>
+            </div>
+            <input
+              id="input-menu-rice"
+              type="text"
+              placeholder={hasSingleDish ? "ปิดไม่ให้พิมพ์ (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "พิมพ์ชื่อข้าว เช่น ข้าวสวยหอมมะลิใหม่..."}
+              value={rice}
+              disabled={hasSingleDish}
+              onChange={(e) => {
+                const val = e.target.value;
+                setRice(val);
+                if (val.trim()) {
+                  setSingleDish('');
+                  if (activeSuggestField === 'singleDish') {
+                    setActiveSuggestField(null);
+                  }
                 }
-              }
-            }}
-            onFocus={() => {
-              if (!hasSingleDish) setActiveSuggestField('rice');
-            }}
-            className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
-              hasSingleDish
-                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
-                : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
-            }`}
-          />
-          {!hasSingleDish && activeSuggestField === 'rice' && (
-            <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-amber-50/70 border border-amber-200 rounded-xl">
-              <span className="text-[10px] font-semibold text-amber-900 w-full mb-0.5 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-600" /> แนะนำจากคลัง:
-              </span>
-              {getSuggestions('ข้าว', rice).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setRice(item.menuName);
-                    setSingleDish('');
-                    setActiveSuggestField(null);
-                  }}
-                  className="text-[11px] bg-white text-slate-700 hover:text-amber-800 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-200/80 transition-colors cursor-pointer"
-                >
-                  + {item.menuName}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 2. อาหารจานเดียว (Disabled if rice/non-spicy/spicy has value) */}
-        <div className="relative">
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span>
-              2. อาหารจานเดียว
-              {hasSetMeal && (
-                <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
-                  (ปิดไม่ให้พิมพ์อัตโนมัติ เนื่องจากระบุข้าวหรือกับข้าวแล้ว)
+              }}
+              onFocus={() => {
+                if (!hasSingleDish) setActiveSuggestField('rice');
+              }}
+              className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
+                hasSingleDish
+                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                  : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500'
+              }`}
+            />
+            {!hasSingleDish && activeSuggestField === 'rice' && (
+              <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-amber-50/70 border border-amber-200 rounded-xl">
+                <span className="text-[10px] font-semibold text-amber-900 w-full mb-0.5 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-600" /> แนะนำจากคลัง:
                 </span>
-              )}
-            </label>
-            <span className="text-[10px] text-slate-400">เช่น ข้าวมันไก่ ก๋วยเตี๋ยว ผัดซีอิ๊ว (วันพุธ)</span>
-          </div>
-          <input
-            id="input-menu-single-dish"
-            type="text"
-            placeholder={hasSetMeal ? "ปิดไม่ให้พิมพ์อัตโนมัติ (เนื่องจากระบุข้าวหรือกับข้าวแล้ว)" : "พิมพ์ชื่ออาหารจานเดียว เช่น ข้าวมันไก่ตอนสูตรอนามัย..."}
-            value={singleDish}
-            disabled={hasSetMeal}
-            onChange={(e) => {
-              const val = e.target.value;
-              setSingleDish(val);
-              if (val.trim()) {
-                setRice('');
-                setNonSpicy('');
-                setSpicy('');
-              }
-            }}
-            onFocus={() => {
-              if (!hasSetMeal) setActiveSuggestField('singleDish');
-            }}
-            className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
-              hasSetMeal
-                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
-                : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
-            }`}
-          />
-          {!hasSetMeal && activeSuggestField === 'singleDish' && (
-            <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-orange-50/70 border border-orange-200 rounded-xl">
-              <span className="text-[10px] font-semibold text-orange-900 w-full mb-0.5 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-orange-600" /> แนะนำจากคลัง:
-              </span>
-              {getSuggestions('อาหารจานเดียว', singleDish).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setSingleDish(item.menuName);
-                    setRice('');
-                    setNonSpicy('');
-                    setSpicy('');
-                    setActiveSuggestField(null);
-                  }}
-                  className="text-[11px] bg-white text-slate-700 hover:text-orange-800 hover:bg-orange-100 px-2.5 py-1 rounded-lg border border-orange-200/80 transition-colors cursor-pointer"
-                >
-                  + {item.menuName}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 3. อาหารไม่เผ็ด (Disabled if singleDish has value) */}
-        <div className="relative">
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-              3. อาหารไม่เผ็ด
-              {hasSingleDish && (
-                <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
-                  (ปิดไม่ให้พิมพ์ เนื่องจากระบุอาหารจานเดียวแล้ว)
-                </span>
-              )}
-            </label>
-            <span className="text-[10px] text-slate-400">เช่น ต้มจืดเต้าหู้หมูสับ ไข่พะโล้ ไก่ทอด</span>
-          </div>
-          <input
-            id="input-menu-non-spicy"
-            type="text"
-            placeholder={hasSingleDish ? "ปิดไม่ให้พิมพ์ (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "พิมพ์ชื่ออาหารไม่เผ็ด เช่น ต้มจืดเต้าหู้หมูสับสาหร่ายวากาเมะ..."}
-            value={nonSpicy}
-            disabled={hasSingleDish}
-            onChange={(e) => setNonSpicy(e.target.value)}
-            onFocus={() => {
-              if (!hasSingleDish) setActiveSuggestField('nonSpicy');
-            }}
-            className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
-              hasSingleDish
-                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
-                : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500'
-            }`}
-          />
-          {!hasSingleDish && activeSuggestField === 'nonSpicy' && (
-            <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-emerald-50/70 border border-emerald-200 rounded-xl">
-              <span className="text-[10px] font-semibold text-emerald-900 w-full mb-0.5 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-emerald-600" /> แนะนำจากคลัง:
-              </span>
-              {getSuggestions('อาหารไม่เผ็ด', nonSpicy).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setNonSpicy(item.menuName);
-                    setActiveSuggestField(null);
-                  }}
-                  className="text-[11px] bg-white text-slate-700 hover:text-emerald-800 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200/80 transition-colors cursor-pointer"
-                >
-                  + {item.menuName}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 4. อาหารเผ็ด (Disabled if singleDish has value) */}
-        <div className="relative">
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
-              4. อาหารเผ็ด
-              {hasSingleDish && (
-                <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
-                  (ปิดไม่ให้พิมพ์ เนื่องจากระบุอาหารจานเดียวแล้ว)
-                </span>
-              )}
-            </label>
-            <span className="text-[10px] text-slate-400">เช่น ผัดกะเพราหมูสับ แกงเขียวหวานไก่ ผัดพริกแกง</span>
-          </div>
-          <input
-            id="input-menu-spicy"
-            type="text"
-            placeholder={hasSingleDish ? "ปิดไม่ให้พิมพ์ (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "พิมพ์ชื่ออาหารเผ็ด เช่น ผัดกะเพราหมูสับใบกะเพราบ้าน..."}
-            value={spicy}
-            disabled={hasSingleDish}
-            onChange={(e) => setSpicy(e.target.value)}
-            onFocus={() => {
-              if (!hasSingleDish) setActiveSuggestField('spicy');
-            }}
-            className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
-              hasSingleDish
-                ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
-                : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500'
-            }`}
-          />
-          {!hasSingleDish && activeSuggestField === 'spicy' && (
-            <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-rose-50/70 border border-rose-200 rounded-xl">
-              <span className="text-[10px] font-semibold text-rose-900 w-full mb-0.5 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-rose-600" /> แนะนำจากคลัง:
-              </span>
-              {getSuggestions('อาหารเผ็ด', spicy).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => {
-                    setSpicy(item.menuName);
-                    setActiveSuggestField(null);
-                  }}
-                  className="text-[11px] bg-white text-slate-700 hover:text-rose-800 hover:bg-rose-100 px-2.5 py-1 rounded-lg border border-rose-200/80 transition-colors cursor-pointer"
-                >
-                  + {item.menuName}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 5. ผลไม้-ของหวาน (Requirement 4: Supports both ผลไม้ and ของหวาน) */}
-        <div className="relative">
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span>
-              5. ผลไม้-ของหวาน
-            </label>
-            <span className="text-[10px] text-slate-400">ดึงได้ทั้งหมวดผลไม้และของหวาน เช่น แตงโม กล้วยน้ำว้า บัวลอย</span>
-          </div>
-          <input
-            id="input-menu-dessert"
-            type="text"
-            placeholder="พิมพ์ชื่อผลไม้หรือของหวาน เช่น แตงโมกินรี หรือ บัวลอยเผือก..."
-            value={dessert}
-            onChange={(e) => setDessert(e.target.value)}
-            onFocus={() => setActiveSuggestField('dessert')}
-            className="w-full px-3.5 py-2 text-xs bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
-          />
-          {activeSuggestField === 'dessert' && (
-            <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-purple-50/70 border border-purple-200 rounded-xl">
-              <span className="text-[10px] font-semibold text-purple-900 w-full mb-0.5 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-purple-600" /> แนะนำจากคลัง (ผลไม้ และ ของหวาน):
-              </span>
-              {getDessertSuggestions(dessert).map((item) => {
-                const isDessert = item.category === 'ของหวาน' || item.menuName.includes('หวาน') || item.menuName.includes('บัวลอย') || item.menuName.includes('กล้วยบวชชี');
-                return (
+                {getSuggestions('ข้าว', rice).map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => {
-                      setDessert(item.menuName);
+                      setRice(item.menuName);
+                      setSingleDish('');
                       setActiveSuggestField(null);
                     }}
-                    className="text-[11px] bg-white text-slate-700 hover:text-purple-800 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200/80 transition-colors cursor-pointer flex items-center gap-1"
+                    className="text-[11px] bg-white text-slate-700 hover:text-amber-800 hover:bg-amber-100 px-2.5 py-1 rounded-lg border border-amber-200/80 transition-colors cursor-pointer"
                   >
-                    <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
-                      isDessert ? 'bg-purple-100 text-purple-700' : 'bg-teal-100 text-teal-700'
-                    }`}>
-                      {isDessert ? 'ของหวาน' : 'ผลไม้'}
-                    </span>
-                    <span>{item.menuName}</span>
+                    + {item.menuName}
                   </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-        {/* Note / Remarks */}
-        <div>
-          <label className="block text-xs font-bold text-slate-700 mb-1">
-            หมายเหตุ / บันทึกเพิ่มเติม
-          </label>
-          <input
-            id="input-menu-note"
-            type="text"
-            placeholder="หมายเหตุ (เริ่มต้นด้วยช่องเปล่า)..."
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500"
-          />
+          {/* 2. อาหารจานเดียว (Disabled if rice/non-spicy/spicy has value) */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span>
+                2. อาหารจานเดียว
+                {hasSetMeal && (
+                  <span className="text-[10px] text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded-md border border-rose-200 font-semibold ml-1">
+                    (ปิดไม่ให้พิมพ์)
+                  </span>
+                )}
+              </label>
+              <span className="text-[10px] text-slate-400">เช่น ข้าวมันไก่ ก๋วยเตี๋ยว ผัดซีอิ๊ว (วันพุธ)</span>
+            </div>
+            <input
+              id="input-menu-single-dish"
+              type="text"
+              placeholder={hasSetMeal ? "ปิดไม่ให้พิมพ์อัตโนมัติ (เนื่องจากระบุข้าวหรือกับข้าวแล้ว)" : "พิมพ์ชื่ออาหารจานเดียว เช่น ข้าวมันไก่ตอนสูตรอนามัย..."}
+              value={singleDish}
+              disabled={hasSetMeal}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSingleDish(val);
+                if (val.trim()) {
+                  setRice('');
+                  setNonSpicy('');
+                  setSpicy('');
+                }
+              }}
+              onFocus={() => {
+                if (!hasSetMeal) setActiveSuggestField('singleDish');
+              }}
+              className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
+                hasSetMeal
+                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                  : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
+              }`}
+            />
+            {!hasSetMeal && activeSuggestField === 'singleDish' && (
+              <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-orange-50/70 border border-orange-200 rounded-xl">
+                <span className="text-[10px] font-semibold text-orange-900 w-full mb-0.5 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-orange-600" /> แนะนำจากคลัง:
+                </span>
+                {getSuggestions('อาหารจานเดียว', singleDish).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setSingleDish(item.menuName);
+                      setRice('');
+                      setNonSpicy('');
+                      setSpicy('');
+                      setActiveSuggestField(null);
+                    }}
+                    className="text-[11px] bg-white text-slate-700 hover:text-orange-800 hover:bg-orange-100 px-2.5 py-1 rounded-lg border border-orange-200/80 transition-colors cursor-pointer"
+                  >
+                    + {item.menuName}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 3. อาหารไม่เผ็ด (Disabled if singleDish has value) */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                3. อาหารไม่เผ็ด
+                {hasSingleDish && (
+                  <span className="text-[10px] text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded-md border border-rose-200 font-semibold ml-1">
+                    (ปิดไม่ให้พิมพ์)
+                  </span>
+                )}
+              </label>
+              <span className="text-[10px] text-slate-400">เช่น ต้มจืดเต้าหู้หมูสับ ไข่พะโล้ ไก่ทอด</span>
+            </div>
+            <input
+              id="input-menu-non-spicy"
+              type="text"
+              placeholder={hasSingleDish ? "ปิดไม่ให้พิมพ์ (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "พิมพ์ชื่ออาหารไม่เผ็ด เช่น ต้มจืดเต้าหู้หมูสับ..."}
+              value={nonSpicy}
+              disabled={hasSingleDish}
+              onChange={(e) => setNonSpicy(e.target.value)}
+              onFocus={() => {
+                if (!hasSingleDish) setActiveSuggestField('nonSpicy');
+              }}
+              className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
+                hasSingleDish
+                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                  : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500'
+              }`}
+            />
+            {!hasSingleDish && activeSuggestField === 'nonSpicy' && (
+              <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-emerald-50/70 border border-emerald-200 rounded-xl">
+                <span className="text-[10px] font-semibold text-emerald-900 w-full mb-0.5 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-emerald-600" /> แนะนำจากคลัง:
+                </span>
+                {getSuggestions('อาหารไม่เผ็ด', nonSpicy).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setNonSpicy(item.menuName);
+                      setActiveSuggestField(null);
+                    }}
+                    className="text-[11px] bg-white text-slate-700 hover:text-emerald-800 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200/80 transition-colors cursor-pointer"
+                  >
+                    + {item.menuName}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 4. อาหารเผ็ด (Disabled if singleDish has value) */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+                4. อาหารเผ็ด
+                {hasSingleDish && (
+                  <span className="text-[10px] text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded-md border border-rose-200 font-semibold ml-1">
+                    (ปิดไม่ให้พิมพ์)
+                  </span>
+                )}
+              </label>
+              <span className="text-[10px] text-slate-400">เช่น ผัดกะเพราหมู แกงเขียวหวานไก่</span>
+            </div>
+            <input
+              id="input-menu-spicy"
+              type="text"
+              placeholder={hasSingleDish ? "ปิดไม่ให้พิมพ์ (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "พิมพ์ชื่ออาหารเผ็ด เช่น ผัดกะเพราหมูสับ..."}
+              value={spicy}
+              disabled={hasSingleDish}
+              onChange={(e) => setSpicy(e.target.value)}
+              onFocus={() => {
+                if (!hasSingleDish) setActiveSuggestField('spicy');
+              }}
+              className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
+                hasSingleDish
+                  ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                  : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500'
+              }`}
+            />
+            {!hasSingleDish && activeSuggestField === 'spicy' && (
+              <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-rose-50/70 border border-rose-200 rounded-xl">
+                <span className="text-[10px] font-semibold text-rose-900 w-full mb-0.5 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-rose-600" /> แนะนำจากคลัง:
+                </span>
+                {getSuggestions('อาหารเผ็ด', spicy).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setSpicy(item.menuName);
+                      setActiveSuggestField(null);
+                    }}
+                    className="text-[11px] bg-white text-slate-700 hover:text-rose-800 hover:bg-rose-100 px-2.5 py-1 rounded-lg border border-rose-200/80 transition-colors cursor-pointer"
+                  >
+                    + {item.menuName}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 5. ผลไม้-ของหวาน (Supports both ผลไม้ and ของหวาน) */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-500 inline-block"></span>
+                5. ผลไม้-ของหวาน
+              </label>
+              <span className="text-[10px] text-slate-400">ดึงได้ทั้งหมวดผลไม้และของหวาน</span>
+            </div>
+            <input
+              id="input-menu-dessert"
+              type="text"
+              placeholder="พิมพ์ชื่อผลไม้หรือของหวาน เช่น แตงโม หรือ บัวลอย..."
+              value={dessert}
+              onChange={(e) => setDessert(e.target.value)}
+              onFocus={() => setActiveSuggestField('dessert')}
+              className="w-full px-3.5 py-2 text-xs bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+            />
+            {activeSuggestField === 'dessert' && (
+              <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-purple-50/70 border border-purple-200 rounded-xl">
+                <span className="text-[10px] font-semibold text-purple-900 w-full mb-0.5 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-purple-600" /> แนะนำจากคลัง:
+                </span>
+                {getDessertSuggestions(dessert).map((item) => {
+                  const isDessert = item.category === 'ของหวาน' || item.menuName.includes('หวาน') || item.menuName.includes('บัวลอย') || item.menuName.includes('กล้วยบวชชี');
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setDessert(item.menuName);
+                        setActiveSuggestField(null);
+                      }}
+                      className="text-[11px] bg-white text-slate-700 hover:text-purple-800 hover:bg-purple-100 px-2.5 py-1 rounded-lg border border-purple-200/80 transition-colors cursor-pointer flex items-center gap-1"
+                    >
+                      <span className={`text-[9px] px-1 py-0.2 rounded font-medium ${
+                        isDessert ? 'bg-purple-100 text-purple-700' : 'bg-teal-100 text-teal-700'
+                      }`}>
+                        {isDessert ? 'ของหวาน' : 'ผลไม้'}
+                      </span>
+                      <span>{item.menuName}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* 6. หมายเหตุ / บันทึกเพิ่มเติม */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>
+                6. หมายเหตุ / บันทึกเพิ่มเติม
+              </label>
+              <span className="text-[10px] text-slate-400">เริ่มต้นด้วยช่องเปล่า (ถ้ามี)</span>
+            </div>
+            <input
+              id="input-menu-note"
+              type="text"
+              placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)..."
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full px-3.5 py-2 text-xs bg-slate-50/50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all"
+            />
+          </div>
         </div>
 
         {/* Action Buttons: Save & Auto-Advance */}
@@ -1286,6 +1323,41 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Delete Entry Confirm Modal */}
+      <ConfirmModal
+        isOpen={Boolean(deleteConfirmDate)}
+        title="ยืนยันการลบรายการอาหาร"
+        message={
+          deleteConfirmDate
+            ? `คุณต้องการลบรายการอาหารวันที่ ${formatThaiDisplay(deleteConfirmDate)} หรือไม่?`
+            : ''
+        }
+        confirmText="ลบรายการ"
+        cancelText="ยกเลิก"
+        type="danger"
+        onConfirm={executeDeleteEntry}
+        onCancel={() => setDeleteConfirmDate(null)}
+      />
+
+      {/* Randomize Month Overwrite Confirm Modal */}
+      <ConfirmModal
+        isOpen={Boolean(randomizeConfirmData)}
+        title="ยืนยันการสุ่มจัดอาหารกลางวันใหม่"
+        message={
+          randomizeConfirmData
+            ? `พบรายการอาหารในเดือน ${THAI_MONTH_NAMES[randomMonth - 1]} ${randomYear + 543} บันทึกอยู่แล้ว ${randomizeConfirmData.count} วัน\n\nต้องการสุ่มจัดเมนูใหม่แทนที่ทั้งหมด (${randomizeConfirmData.total} วันทำการ) หรือไม่?`
+            : ''
+        }
+        confirmText="ยืนยันการจัดใหม่"
+        cancelText="ยกเลิก"
+        type="info"
+        onConfirm={async () => {
+          setRandomizeConfirmData(null);
+          await executeRandomizeMonth();
+        }}
+        onCancel={() => setRandomizeConfirmData(null)}
+      />
     </div>
   );
 };

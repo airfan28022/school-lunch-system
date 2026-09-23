@@ -463,24 +463,6 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
                     {items.length}
                   </span>
                 </div>
-
-                {/* Quick Add Button in Header (Auto-saves if text is present, or focuses input) */}
-                <button
-                  id={`btn-quick-add-${category}`}
-                  type="button"
-                  onClick={() => {
-                    if (currentText.trim()) {
-                      handleQuickAdd(category);
-                    } else {
-                      const inputEl = document.getElementById(`input-quick-add-${category}`) as HTMLInputElement | null;
-                      if (inputEl) inputEl.focus();
-                    }
-                  }}
-                  title={`บันทึกอัตโนมัติในหมวด ${category} (กด + เพื่อบันทึก)`}
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${theme.addBtnHover}`}
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                </button>
               </div>
 
               {/* Dedicated In-Column Quick Add Input with Auto-Save on "+" or Enter */}

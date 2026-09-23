@@ -284,10 +284,6 @@ export default function App() {
   };
 
   const handleDeleteDailyMenu = async (dateStr: string) => {
-    if (!window.confirm(`คุณต้องการลบข้อมูลเมนูอาหารของวันที่ ${dateStr} ใช่หรือไม่?`)) {
-      return;
-    }
-
     const updated = dailyMenus.filter((m) => m.date !== dateStr);
     setDailyMenus(updated);
     showToast('ลบข้อมูลเรียบร้อย', `ลบเมนูวันที่ ${dateStr} แล้ว`, 'info');

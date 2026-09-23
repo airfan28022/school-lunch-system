@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ActivityPhoto } from '../types';
 import { formatDriveDirectUrl, FALLBACK_IMAGE_URL, fileToBase64 } from '../services/api';
+import { ConfirmModal } from './ConfirmModal';
 import { 
   X, 
   ZoomIn, 
@@ -37,6 +38,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   });
 
   const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
   const currentPhoto = allPhotos[currentIndex] || initialPhoto;
   const directUrl = formatDriveDirectUrl(currentPhoto.url);
 
@@ -133,13 +135,8 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           {/* Admin: Delete Image */}
           {onDelete && (
             <button
-              onClick={() => {
-                if (window.confirm('คุณต้องการลบรูปภาพนี้ใช่หรือไม่?')) {
-                  onDelete();
-                  onClose();
-                }
-              }}
-              className="p-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-colors flex items-center gap-1 text-xs"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white transition-colors flex items-center gap-1 text-xs cursor-pointer"
               title="ลบรูปภาพนี้"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -202,6 +199,21 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           Direct Link: {directUrl.startsWith('https://lh3.googleusercontent.com') ? 'lh3.googleusercontent.com/d/...' : 'Local Preview'}
         </div>
       </div>
+      {/* Confirm Delete Photo Modal */}
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        title="ยืนยันการลบรูปภาพ"
+        message="คุณต้องการลบรูปภาพกิจกรรมนี้ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้"
+        confirmText="ยืนยันการลบ"
+        cancelText="ยกเลิก"
+        type="danger"
+        onConfirm={() => {
+          setShowDeleteConfirm(false);
+          if (onDelete) onDelete();
+          onClose();
+        }}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </div>
   );
 };
