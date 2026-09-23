@@ -41,7 +41,14 @@ export default function App() {
   const [settings, setSettings] = useState<SchoolSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
-      return saved ? JSON.parse(saved) : INITIAL_SETTINGS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (!parsed.gasWebAppUrl) {
+          parsed.gasWebAppUrl = INITIAL_SETTINGS.gasWebAppUrl;
+        }
+        return parsed;
+      }
+      return INITIAL_SETTINGS;
     } catch {
       return INITIAL_SETTINGS;
     }
@@ -150,8 +157,9 @@ export default function App() {
         const data = await fetchServerData();
         if (!isMounted || !data || !data.success) return;
 
-        if (data.lastUpdated && data.lastUpdated !== lastServerTimestampRef.current) {
-          lastServerTimestampRef.current = data.lastUpdated;
+        const shouldUpdate = isInitial || (data.lastUpdated && data.lastUpdated !== lastServerTimestampRef.current);
+        if (shouldUpdate) {
+          lastServerTimestampRef.current = data.lastUpdated || '';
 
           if (data.settings && Object.keys(data.settings).length > 0) {
             setSettings((prev) => ({ ...prev, ...data.settings }));
