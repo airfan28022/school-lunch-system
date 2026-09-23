@@ -169,3 +169,137 @@ export function exportToCsv(filename: string, rows: string[][]) {
   link.click();
   document.body.removeChild(link);
 }
+
+/**
+ * ดึงข้อมูลที่ซิงค์ส่วนกลางจาก Server (ใช้ร่วมกันทุกเครื่อง ทุกเบราว์เซอร์ ทุกอีเมล)
+ */
+export async function fetchServerData() {
+  try {
+    const res = await fetch('/api/data', {
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP Error ${res.status}`);
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn('fetchServerData error:', err);
+    return null;
+  }
+}
+
+/**
+ * บันทึกข้อมูลขึ้น Server เพื่อซิงค์ไปทุกเครื่อง ทุกอุปกรณ์ทันที
+ */
+export async function saveServerData(payload: {
+  settings?: SchoolSettings;
+  menuBank?: MenuItem[];
+  dailyMenus?: DailyMenuEntry[];
+  syncToGas?: boolean;
+}) {
+  try {
+    const res = await fetch('/api/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP Error ${res.status}`);
+    }
+    return await res.json();
+  } catch (err) {
+    console.warn('saveServerData error:', err);
+    return null;
+  }
+}
+
+/**
+ * อัปโหลดตราสัญลักษณ์โรงเรียน (บันทึกไปยัง Google Drive)
+ */
+export async function uploadLogoToServer(
+  fileData: string,
+  fileName: string,
+  mimeType: string
+): Promise<{
+  success: boolean;
+  logoUrl: string;
+  fileId?: string;
+  isDrive: boolean;
+  message?: string;
+}> {
+  const res = await fetch('/api/upload-logo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileData, fileName, mimeType })
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP Error ${res.status}`);
+  }
+
+  return await res.json();
+}
+
+/**
+ * อัปโหลดรูปภาพกิจกรรมอาหารกลางวันไปยัง Google Drive
+ */
+export async function uploadPhotoToServer(
+  fileData: string,
+  fileName: string,
+  mimeType: string,
+  activityName: string,
+  date: string
+): Promise<ActivityPhoto> {
+  const res = await fetch('/api/upload-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileData, fileName, mimeType, activityName, date })
+  });
+
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => ({}));
+    throw new Error(errJson.error || `HTTP Error ${res.status}`);
+  }
+
+  const json = await res.json();
+  if (json.success && json.photo) {
+    return json.photo;
+  }
+  throw new Error('ไม่สามารถบันทึกรูปภาพได้');
+}
+
+/**
+ * ทดสอบการเชื่อมต่อ Google Apps Script
+ */
+export async function testGasConnection(url: string) {
+  const res = await fetch('/api/test-gas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP Error ${res.status}`);
+  }
+
+  return await res.json();
+}
+
+/**
+ * สั่งซิงค์ข้อมูลทั้งหมดกับ Google Sheets & Drive
+ */
+export async function syncWithGas(url?: string) {
+  const res = await fetch('/api/sync-gas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `HTTP Error ${res.status}`);
+  }
+
+  return await res.json();
+}

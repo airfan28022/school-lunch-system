@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   MenuItem, 
   DailyMenuEntry, 
@@ -21,7 +21,12 @@ import { NotificationToast } from './components/NotificationToast';
 import { 
   callGasGet, 
   callGasPost, 
-  formatDriveDirectUrl 
+  fetchServerData,
+  saveServerData,
+  uploadLogoToServer,
+  uploadPhotoToServer,
+  testGasConnection,
+  syncWithGas
 } from './services/api';
 
 const STORAGE_KEY_SETTINGS = 'school_lunch_settings_v1';
@@ -32,7 +37,7 @@ export default function App() {
   // Navigation active tab
   const [activeTab, setActiveTab] = useState<'planner' | 'repository' | 'report' | 'settings'>('planner');
 
-  // Core Data States with localStorage persistence
+  // Core Data States with localStorage persistence as fast-boot cache
   const [settings, setSettings] = useState<SchoolSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_SETTINGS);
@@ -56,7 +61,7 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_KEY_DAILY_MENUS) || localStorage.getItem('school_lunch_daily_menus_v1');
       if (saved) {
         const parsed: DailyMenuEntry[] = JSON.parse(saved);
-        return parsed.map((item) => ({ ...item, photos: [] }));
+        return parsed.map((item) => ({ ...item, photos: item.photos || [] }));
       }
       return INITIAL_DAILY_MENUS;
     } catch {
@@ -64,8 +69,8 @@ export default function App() {
     }
   });
 
-  // GAS connection status
-  const [isGasConnected, setIsGasConnected] = useState<boolean>(false);
+  // GAS / Cloud connection status
+  const [isGasConnected, setIsGasConnected] = useState<boolean>(Boolean(settings.gasWebAppUrl));
 
   // Lightbox Modal state
   const [lightboxData, setLightboxData] = useState<{
@@ -78,7 +83,10 @@ export default function App() {
   // Notification Toasts state
   const [notifications, setNotifications] = useState<ToastNotification[]>([]);
 
-  // Sync to localStorage
+  // Ref to track last updated timestamp from server to prevent overwrite loops
+  const lastServerTimestampRef = useRef<string>('');
+
+  // Sync to localStorage as client cache
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
@@ -130,37 +138,65 @@ export default function App() {
     setNotifications((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Attempt initial sync with GAS if URL configured
+  // -------------------------------------------------------------
+  // Real-Time Cross-Device Synchronization
+  // ซิงค์ข้อมูลข้ามอุปกรณ์ ทุกเบราว์เซอร์ และทุกบัญชีอีเมล
+  // -------------------------------------------------------------
   useEffect(() => {
-    if (!settings.gasWebAppUrl) return;
-
     let isMounted = true;
-    callGasGet(settings.gasWebAppUrl, { action: 'getAllData' })
-      .then((res) => {
-        if (!isMounted) return;
-        if (res.status === 'success') {
-          setIsGasConnected(true);
-          if (res.settings && Object.keys(res.settings).length > 0) {
-            setSettings((prev) => ({ ...prev, ...res.settings }));
+
+    const pullServerData = async (isInitial = false) => {
+      try {
+        const data = await fetchServerData();
+        if (!isMounted || !data || !data.success) return;
+
+        if (data.lastUpdated && data.lastUpdated !== lastServerTimestampRef.current) {
+          lastServerTimestampRef.current = data.lastUpdated;
+
+          if (data.settings && Object.keys(data.settings).length > 0) {
+            setSettings((prev) => ({ ...prev, ...data.settings }));
+            if (data.settings.gasWebAppUrl) {
+              setIsGasConnected(true);
+            }
           }
-          if (res.menuBank && res.menuBank.length > 0) {
-            setMenuBank(res.menuBank);
+
+          if (Array.isArray(data.menuBank) && data.menuBank.length > 0) {
+            setMenuBank(data.menuBank);
           }
-          if (res.dailyMenu && res.dailyMenu.length > 0) {
-            setDailyMenus(res.dailyMenu);
+
+          if (Array.isArray(data.dailyMenus)) {
+            setDailyMenus(data.dailyMenus);
           }
-          showToast('ซิงค์ข้อมูลสำเร็จ', 'ดึงข้อมูลล่าสุดจาก Google Sheets และ Drive เรียบร้อย', 'info');
+
+          if (!isInitial) {
+            console.log('Synchronized latest data from central server across devices');
+          }
         }
-      })
-      .catch((err) => {
-        console.warn('Initial GAS fetch error:', err);
-        setIsGasConnected(false);
-      });
+      } catch (err) {
+        console.warn('Central server sync poll warning:', err);
+      }
+    };
+
+    // 1. Initial pull from server
+    pullServerData(true);
+
+    // 2. Refresh on window focus (when user switches back to browser tab or device unlocks)
+    const onWindowFocus = () => {
+      pullServerData(false);
+    };
+    window.addEventListener('focus', onWindowFocus);
+
+    // 3. Periodic polling every 12 seconds
+    const intervalId = setInterval(() => {
+      pullServerData(false);
+    }, 12000);
 
     return () => {
       isMounted = false;
+      window.removeEventListener('focus', onWindowFocus);
+      clearInterval(intervalId);
     };
-  }, [settings.gasWebAppUrl]);
+  }, []);
 
   // -------------------------------------------------------------
   // Menu Repository Actions (Module 1)
@@ -175,6 +211,9 @@ export default function App() {
     const updated = [newItem, ...menuBank];
     setMenuBank(updated);
     showToast('เพิ่มเมนูสำเร็จ', `บันทึก "${item.menuName}" ในหมวด ${item.category} แล้ว`, 'success');
+
+    // Save to server for cross-device sync
+    await saveServerData({ menuBank: updated, syncToGas: true });
 
     // Sync to GAS in background if configured
     if (settings.gasWebAppUrl) {
@@ -194,6 +233,8 @@ export default function App() {
     setMenuBank(updated);
     showToast('อัปเดตเมนูแล้ว', `แก้ไขข้อมูล "${item.menuName}" เรียบร้อยแล้ว`, 'success');
 
+    await saveServerData({ menuBank: updated, syncToGas: true });
+
     if (settings.gasWebAppUrl) {
       try {
         await callGasPost(settings.gasWebAppUrl, {
@@ -212,6 +253,8 @@ export default function App() {
     setMenuBank(updated);
     showToast('ลบเมนูแล้ว', `ลบรายการ "${target?.menuName || ''}" ออกจากคลังแล้ว`, 'info');
 
+    await saveServerData({ menuBank: updated, syncToGas: true });
+
     if (settings.gasWebAppUrl) {
       try {
         await callGasPost(settings.gasWebAppUrl, {
@@ -224,9 +267,10 @@ export default function App() {
     }
   };
 
-  const handleSeedPresets = () => {
+  const handleSeedPresets = async () => {
     setMenuBank(INITIAL_MENU_BANK);
     showToast('เติมเมนูตัวอย่างแล้ว', 'รีเซ็ตคลังเมนูอาหารกลางวันมาตรฐานโรงเรียนแล้ว', 'success');
+    await saveServerData({ menuBank: INITIAL_MENU_BANK, syncToGas: true });
   };
 
   // -------------------------------------------------------------
@@ -245,6 +289,9 @@ export default function App() {
     }
 
     setDailyMenus(updated);
+
+    // Save to central server so all other devices receive this change
+    await saveServerData({ dailyMenus: updated, syncToGas: true });
 
     // Sync to GAS in background if configured
     if (settings.gasWebAppUrl) {
@@ -267,6 +314,8 @@ export default function App() {
     const updated = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
     setDailyMenus(updated);
 
+    await saveServerData({ dailyMenus: updated, syncToGas: true });
+
     if (settings.gasWebAppUrl) {
       try {
         for (const entry of entries) {
@@ -288,6 +337,8 @@ export default function App() {
     setDailyMenus(updated);
     showToast('ลบข้อมูลเรียบร้อย', `ลบเมนูวันที่ ${dateStr} แล้ว`, 'info');
 
+    await saveServerData({ dailyMenus: updated, syncToGas: true });
+
     if (settings.gasWebAppUrl) {
       try {
         await callGasPost(settings.gasWebAppUrl, {
@@ -300,6 +351,9 @@ export default function App() {
     }
   };
 
+  // -------------------------------------------------------------
+  // Image & Logo Upload Actions (Google Drive Native)
+  // -------------------------------------------------------------
   const handleUploadImageToDrive = async (
     fileData: string,
     fileName: string,
@@ -307,29 +361,87 @@ export default function App() {
     activityName: string,
     dateStr: string
   ): Promise<ActivityPhoto> => {
-    if (!settings.gasWebAppUrl) {
-      throw new Error('ยังไม่ได้เชื่อมต่อ Google Apps Script');
+    try {
+      // 1. Try server endpoint which communicates with Google Drive
+      const photo = await uploadPhotoToServer(fileData, fileName, mimeType, activityName, dateStr);
+      return photo;
+    } catch (serverErr) {
+      // 2. Direct client fallback to GAS if configured
+      if (settings.gasWebAppUrl) {
+        const res = await callGasPost(settings.gasWebAppUrl, {
+          action: 'uploadImage',
+          fileData,
+          fileName,
+          mimeType,
+          activityName,
+          date: dateStr
+        });
+
+        if (res.status === 'success') {
+          return {
+            url: res.directUrl || res.url,
+            fileId: res.fileId,
+            name: res.fileName || fileName,
+            uploadedAt: res.uploadedAt || new Date().toLocaleString('th-TH'),
+            folderName: res.folderName
+          };
+        } else {
+          throw new Error(res.message || 'ไม่สามารถอัปโหลดไปยัง Google Drive ได้');
+        }
+      }
+      throw serverErr;
     }
+  };
 
-    const res = await callGasPost(settings.gasWebAppUrl, {
-      action: 'uploadImage',
-      fileData,
-      fileName,
-      mimeType,
-      activityName,
-      date: dateStr
-    });
+  const handleUploadLogo = async (
+    fileData: string,
+    fileName: string,
+    mimeType: string
+  ): Promise<{ logoUrl: string; isDrive: boolean; message?: string }> => {
+    try {
+      const res = await uploadLogoToServer(fileData, fileName, mimeType);
+      if (res && res.success && res.logoUrl) {
+        setSettings((prev) => ({ ...prev, logoUrl: res.logoUrl }));
+        return {
+          logoUrl: res.logoUrl,
+          isDrive: res.isDrive,
+          message: res.message
+        };
+      }
+      throw new Error(res?.message || 'ไม่สามารถบันทึกตราสัญลักษณ์ได้');
+    } catch (err: any) {
+      // Direct GAS upload fallback if available
+      if (settings.gasWebAppUrl) {
+        try {
+          const gasRes = await callGasPost(settings.gasWebAppUrl, {
+            action: 'uploadLogo',
+            fileData,
+            fileName,
+            mimeType
+          });
+          if (gasRes.status === 'success' && (gasRes.directUrl || gasRes.logoUrl)) {
+            const driveUrl = gasRes.directUrl || gasRes.logoUrl;
+            setSettings((prev) => ({ ...prev, logoUrl: driveUrl }));
+            await saveServerData({ settings: { ...settings, logoUrl: driveUrl } });
+            return {
+              logoUrl: driveUrl,
+              isDrive: true,
+              message: 'บันทึกภาพลง Google Drive เรียบร้อยแล้ว'
+            };
+          }
+        } catch (gasErr) {
+          console.warn('Direct GAS logo upload failed:', gasErr);
+        }
+      }
 
-    if (res.status === 'success') {
+      // Local fallback
+      setSettings((prev) => ({ ...prev, logoUrl: fileData }));
+      await saveServerData({ settings: { ...settings, logoUrl: fileData } });
       return {
-        url: res.directUrl || res.url,
-        fileId: res.fileId,
-        name: res.fileName || fileName,
-        uploadedAt: res.uploadedAt || new Date().toLocaleString('th-TH'),
-        folderName: res.folderName
+        logoUrl: fileData,
+        isDrive: false,
+        message: 'บันทึกภาพในระบบแล้ว'
       };
-    } else {
-      throw new Error(res.message || 'ไม่สามารถอัปโหลดได้');
     }
   };
 
@@ -338,6 +450,13 @@ export default function App() {
   // -------------------------------------------------------------
   const handleSaveSettings = async (updated: SchoolSettings) => {
     setSettings(updated);
+    if (updated.gasWebAppUrl) {
+      setIsGasConnected(true);
+    }
+
+    // Save to central server to sync to all devices immediately
+    await saveServerData({ settings: updated, syncToGas: true });
+
     if (updated.gasWebAppUrl) {
       try {
         await callGasPost(updated.gasWebAppUrl, {
@@ -352,26 +471,62 @@ export default function App() {
 
   const handleTestGasConnection = async (url: string): Promise<{ success: boolean; message: string }> => {
     try {
-      const res = await callGasGet(url, { action: 'ping' });
-      if (res && res.status === 'success') {
+      const res = await testGasConnection(url);
+      if (res && res.success) {
         setIsGasConnected(true);
         return {
           success: true,
-          message: res.message || 'เชื่อมต่อ Google Apps Script และ Google Sheets สำเร็จสมบูรณ์'
+          message: res.data?.message || 'เชื่อมต่อ Google Apps Script และ Google Sheets สำเร็จสมบูรณ์'
         };
       }
       setIsGasConnected(false);
       return {
         success: false,
-        message: res?.message || 'สคริปต์ตอบกลับ แต่สถานะไม่สำเร็จ'
+        message: 'การตอบกลับจาก Google Apps Script ไม่สมบูรณ์'
       };
     } catch (err: any) {
-      console.warn('GAS connection test result:', err?.message || err);
+      // Direct ping fallback
+      try {
+        const direct = await callGasGet(url, { action: 'ping' });
+        if (direct && direct.status === 'success') {
+          setIsGasConnected(true);
+          return {
+            success: true,
+            message: 'เชื่อมต่อ Google Apps Script และ Google Sheets สำเร็จสมบูรณ์'
+          };
+        }
+      } catch (directErr) {
+        console.warn('Direct ping error:', directErr);
+      }
+
       setIsGasConnected(false);
       return {
         success: false,
-        message: err?.message || 'ไม่สามารถเชื่อมต่อ Google Apps Script ได้ (Failed to fetch)'
+        message: err?.message || 'ไม่สามารถเชื่อมต่อ Google Apps Script ได้ (โปรดตรวจสอบสิทธิ์ Anyone)'
       };
+    }
+  };
+
+  const handleSyncGas = async (url: string): Promise<boolean> => {
+    try {
+      const res = await syncWithGas(url);
+      if (res && res.success) {
+        if (res.settings) {
+          setSettings((prev) => ({ ...prev, ...res.settings, gasWebAppUrl: url }));
+        }
+        if (res.menuBank) {
+          setMenuBank(res.menuBank);
+        }
+        if (res.dailyMenus) {
+          setDailyMenus(res.dailyMenus);
+        }
+        setIsGasConnected(true);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('handleSyncGas error:', err);
+      return false;
     }
   };
 
@@ -414,7 +569,7 @@ export default function App() {
             onOpenLightbox={handleOpenLightbox}
             showToast={showToast}
             gasWebAppUrl={settings.gasWebAppUrl}
-            onUploadImageToDrive={settings.gasWebAppUrl ? handleUploadImageToDrive : undefined}
+            onUploadImageToDrive={handleUploadImageToDrive}
           />
         )}
 
@@ -443,7 +598,9 @@ export default function App() {
           <SettingsModal
             settings={settings}
             onSaveSettings={handleSaveSettings}
+            onUploadLogo={handleUploadLogo}
             onTestGasConnection={handleTestGasConnection}
+            onSyncGas={handleSyncGas}
             showToast={showToast}
           />
         )}
