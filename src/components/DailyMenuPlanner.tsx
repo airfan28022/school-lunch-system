@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DailyMenuEntry, MenuItem, ActivityPhoto, MenuCategory } from '../types';
+import { INITIAL_MENU_BANK } from '../data/initialData';
 import { 
   Calendar as CalendarIcon, 
   ChevronLeft, 
@@ -287,24 +288,30 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   const handleRandomizeMonth = async () => {
     setIsRandomizing(true);
     try {
-      // 1. Classify items from menuBank
+      // 1. Pull directly from menuBank (คลังเมนู), with intelligent category fallback
       const isDessertName = (name: string) => {
         const n = name.toLowerCase();
         return n.includes('บัวลอย') || n.includes('กล้วยบวชชี') || n.includes('เฉาก๊วย') || 
-               n.includes('หวาน') || n.includes('ถั่วเขียว') || n.includes('วุ้น');
+               n.includes('หวาน') || n.includes('ถั่วเขียว') || n.includes('วุ้น') ||
+               n.includes('แกงบวด') || n.includes('ทองหยอด') || n.includes('ฟักทองแกงบวด');
       };
 
-      const riceItems = menuBank.filter((m) => m.category === 'ข้าว');
-      const singleDishItems = menuBank.filter((m) => m.category === 'อาหารจานเดียว');
-      const nonSpicyItems = menuBank.filter((m) => m.category === 'อาหารไม่เผ็ด');
-      const spicyItems = menuBank.filter((m) => m.category === 'อาหารเผ็ด');
-      const fruitItems = menuBank.filter((m) => m.category === 'ผลไม้' || (m.category === 'ผลไม้-ของหวาน' && !isDessertName(m.menuName)));
-      const dessertItems = menuBank.filter((m) => m.category === 'ของหวาน' || (m.category === 'ผลไม้-ของหวาน' && isDessertName(m.menuName)));
+      const getPool = (category: MenuCategory): MenuItem[] => {
+        const fromBank = menuBank.filter((m) => m.category === category);
+        if (fromBank.length > 0) return fromBank;
+        return INITIAL_MENU_BANK.filter((m) => m.category === category);
+      };
 
-      if (singleDishItems.length === 0 && riceItems.length === 0) {
-        showToast('คลังเมนูว่าง', 'กรุณาเพิ่มเมนูอาหารในคลังเมนูก่อนสุ่มจัดอาหารกลางวัน', 'warning');
-        return;
-      }
+      const riceItems = getPool('ข้าว');
+      const singleDishItems = getPool('อาหารจานเดียว');
+      const nonSpicyItems = getPool('อาหารไม่เผ็ด');
+      const spicyItems = getPool('อาหารเผ็ด');
+
+      const fruitBank = menuBank.filter((m) => m.category === 'ผลไม้' || (m.category === 'ผลไม้-ของหวาน' && !isDessertName(m.menuName)));
+      const fruitItems = fruitBank.length > 0 ? fruitBank : INITIAL_MENU_BANK.filter((m) => m.category === 'ผลไม้');
+
+      const dessertBank = menuBank.filter((m) => m.category === 'ของหวาน' || (m.category === 'ผลไม้-ของหวาน' && isDessertName(m.menuName)));
+      const dessertItems = dessertBank.length > 0 ? dessertBank : INITIAL_MENU_BANK.filter((m) => m.category === 'ของหวาน');
 
       // 2. Gather all school days (Mon-Fri) in the selected month & year
       const daysInMonth = new Date(randomYear, randomMonth, 0).getDate();
@@ -359,38 +366,61 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
       const generatedEntries: DailyMenuEntry[] = [];
 
       // 3. Process each week applying strict constraints:
-      // Requirement: Single dish is ONLY on Wednesday (dayOfWeek === 3)
-      // Requirement: Dessert 2 days per week, remainder 3 days is Fruit
-      // User request: "ของหวานจะอยู่กับอาหารจานเดียวยิ่งดีเลย" -> Pair dessert with Wednesday single dish!
-      schoolDaysByWeek.forEach((week) => {
+      // - Single dish: exactly 1 day per week, specifically on Wednesday (dayOfWeek === 3)
+      // - ข้าวจานเดียวประกอบด้วย: ข้าวจานเดียว + (ของหวาน หรือ ผลไม้อย่างใดอย่างหนึ่ง)
+      // - ข้าวประกอบด้วย: ข้าว + อาหารเผ็ด + อาหารไม่เผ็ด + (ของหวาน หรือ ผลไม้อย่างใดอย่างหนึ่ง)
+      // - ของหวาน: สลับ 2 วันต่อสัปดาห์ กับ 1 วันต่อสัปดาห์ (สัปดาห์คู่ 2 วัน, สัปดาห์คี่ 1 วัน)
+      // - วันพุธ (อาหารจานเดียว): เน้นของหวาน ใช้ผลไม้บ้างก็ดี
+      // - วันที่เหลือ: จัดเป็นผลไม้สด
+      schoolDaysByWeek.forEach((week, weekIdx) => {
         const days = week.dates;
+
+        // Determine number of dessert days for this week: alternate 2 days and 1 day
+        // e.g. Week 1 (idx 0): 2 days, Week 2 (idx 1): 1 day, Week 3 (idx 2): 2 days, Week 4 (idx 3): 1 day
+        const targetDessertCount = (weekIdx % 2 === 0) ? 2 : 1;
 
         const dessertIndices = new Set<number>();
         const wedIdx = days.findIndex((d) => d.getDay() === 3);
 
-        if (wedIdx !== -1) {
-          // Wednesday has Single Dish AND gets Dessert #1!
-          dessertIndices.add(wedIdx);
+        if (targetDessertCount === 2) {
+          // 2 dessert days this week
+          if (wedIdx !== -1) {
+            dessertIndices.add(wedIdx); // Wednesday single dish pairs with dessert #1!
 
-          // Pick 2nd dessert day from remaining school days (prefer Friday, then Tuesday)
-          const friIdx = days.findIndex((d) => d.getDay() === 5);
-          const tueIdx = days.findIndex((d) => d.getDay() === 2);
-          const otherDays = days.map((_, i) => i).filter((i) => i !== wedIdx);
+            // Pick 2nd dessert day from remaining school days (prefer Friday, then Tuesday)
+            const otherDays = days.map((_, i) => i).filter((i) => i !== wedIdx);
+            const friIdx = days.findIndex((d) => d.getDay() === 5);
+            const tueIdx = days.findIndex((d) => d.getDay() === 2);
 
-          if (friIdx !== -1 && otherDays.includes(friIdx)) {
-            dessertIndices.add(friIdx);
-          } else if (tueIdx !== -1 && otherDays.includes(tueIdx)) {
-            dessertIndices.add(tueIdx);
-          } else if (otherDays.length > 0) {
-            dessertIndices.add(otherDays[0]);
+            if (friIdx !== -1 && otherDays.includes(friIdx)) {
+              dessertIndices.add(friIdx);
+            } else if (tueIdx !== -1 && otherDays.includes(tueIdx)) {
+              dessertIndices.add(tueIdx);
+            } else if (otherDays.length > 0) {
+              dessertIndices.add(otherDays[0]);
+            }
+          } else {
+            // Partial week without Wednesday (e.g. month start/end)
+            if (days.length > 0) dessertIndices.add(0);
+            if (days.length > 1) dessertIndices.add(days.length - 1);
           }
         } else {
-          // If Wednesday not in this week (e.g. partial week at month boundary)
-          if (days.length <= 2) {
-            if (days.length > 0) dessertIndices.add(0);
+          // 1 dessert day this week: "เน้นของหวาน ใช้ผลไม้บ้างก็ดี"
+          if (wedIdx !== -1) {
+            // Mostly Wednesday gets the dessert (weekIdx % 4 !== 3); occasionally (weekIdx % 4 === 3) Wednesday gets Fruit ("ใช้ผลไม้บ้างก็ดี") and another day gets dessert
+            const isWedDessert = (weekIdx % 4 !== 3);
+            if (isWedDessert) {
+              dessertIndices.add(wedIdx);
+            } else {
+              // Wednesday gets Fruit today, so assign the 1 dessert to Friday or Tuesday
+              const friIdx = days.findIndex((d) => d.getDay() === 5);
+              const tueIdx = days.findIndex((d) => d.getDay() === 2);
+              if (friIdx !== -1) dessertIndices.add(friIdx);
+              else if (tueIdx !== -1) dessertIndices.add(tueIdx);
+              else dessertIndices.add(0);
+            }
           } else {
-            dessertIndices.add(0);
-            dessertIndices.add(Math.min(2, days.length - 1));
+            if (days.length > 0) dessertIndices.add(0);
           }
         }
 
@@ -398,7 +428,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           const dateStr = toDateString(dateObj);
           const dayOfWeek = dateObj.getDay();
 
-          // Requirement: Single dish 1 day per week, specifically on Wednesday (dayOfWeek === 3)
+          // Single dish 1 day per week, specifically on Wednesday (dayOfWeek === 3)
           const isWednesday = dayOfWeek === 3;
 
           let itemRice = '';
@@ -407,15 +437,25 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           let itemSpicy = '';
           let itemSweet = '';
 
+          // Determine dessert vs fruit for today based on calculated dessertIndices
+          const isDessertToday = dessertIndices.has(idx);
+          if (isDessertToday) {
+            itemSweet = getRandom(dessertItems.length > 0 ? dessertItems : fruitItems, lastDessert);
+            lastDessert = itemSweet;
+          } else {
+            itemSweet = getRandom(fruitItems.length > 0 ? fruitItems : dessertItems, lastFruit);
+            lastFruit = itemSweet;
+          }
+
           if (isWednesday) {
-            // Wednesday = Single Dish
+            // Requirement: Single Dish + (Dessert OR Fruit)
             itemSingleDish = getRandom(singleDishItems, lastSingleDish);
             lastSingleDish = itemSingleDish;
             itemRice = '';
             itemNonSpicy = '';
             itemSpicy = '';
           } else {
-            // Other days = Rice + Non-Spicy + Spicy
+            // Requirement: Rice + Spicy + Non-Spicy + (Dessert OR Fruit)
             itemRice = getRandom(riceItems, lastRice);
             lastRice = itemRice;
             itemSingleDish = '';
@@ -423,15 +463,6 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
             lastNonSpicy = itemNonSpicy;
             itemSpicy = getRandom(spicyItems, lastSpicy);
             lastSpicy = itemSpicy;
-          }
-
-          // Dessert (2 days/week) vs Fruit (remainder)
-          if (dessertIndices.has(idx)) {
-            itemSweet = getRandom(dessertItems.length > 0 ? dessertItems : fruitItems, lastDessert);
-            lastDessert = itemSweet;
-          } else {
-            itemSweet = getRandom(fruitItems.length > 0 ? fruitItems : dessertItems, lastFruit);
-            lastFruit = itemSweet;
           }
 
           generatedEntries.push({

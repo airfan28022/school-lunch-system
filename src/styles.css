@@ -52,7 +52,7 @@ body {
  * ------------------------------------------------------------- */
 @page {
   size: A4 portrait;
-  margin: 10mm 12mm 10mm 12mm;
+  margin: 10mm 15mm 10mm 15mm;
 }
 
 @media print {
@@ -100,10 +100,11 @@ body {
     display: block !important;
     width: 100% !important;
     max-width: 100% !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     border: none !important;
     box-shadow: none !important;
+    box-sizing: border-box !important;
     page-break-inside: auto !important;
     break-inside: auto !important;
     overflow: visible !important;
@@ -141,9 +142,9 @@ body {
     max-width: 100% !important;
     table-layout: fixed !important;
     border-collapse: collapse !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    font-size: 11pt !important;
+    border: 1.5pt solid #000000 !important;
+    margin: 0 auto !important;
+    font-size: 10.5pt !important;
     line-height: 1.35 !important;
     page-break-before: avoid !important;
     break-before: avoid-page !important;
@@ -171,7 +172,7 @@ body {
     font-size: 11pt !important;
     font-weight: bold !important;
     border: 1pt solid #000000 !important;
-    padding: 6px 6px !important;
+    padding: 6px 4px !important;
     text-align: center !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -179,7 +180,7 @@ body {
   }
 
   table.a4-print-table td {
-    border: 1pt solid #333333 !important;
+    border: 1pt solid #000000 !important;
     padding: 6px 6px !important;
     vertical-align: middle !important;
     font-size: 10.5pt !important;
@@ -195,24 +196,28 @@ body {
     border-top: 2pt solid #ca8a04 !important;
   }
 
-  /* Specific column widths for 3-column table: วันที่, รายการอาหาร, หมายเหตุ */
+  /* Specific column widths for 3-column table: วันที่, รายการอาหาร, หมายเหตุ (Exact 100%) */
   .col-print-date {
-    width: 17% !important;
+    width: 16% !important;
     text-align: center !important;
     white-space: nowrap !important;
     font-weight: 700 !important;
-    font-size: 10.5pt !important;
-    padding: 6px 4px !important;
+    font-size: 10pt !important;
+    padding: 6px 3px !important;
+    border-left: 1.5pt solid #000000 !important;
+    border-right: 1pt solid #000000 !important;
     box-sizing: border-box !important;
   }
 
   .col-print-menu {
-    width: 67% !important;
+    width: 68% !important;
     text-align: left !important;
     padding: 6px 8px !important;
     word-break: break-word !important;
     overflow-wrap: break-word !important;
     white-space: normal !important;
+    border-left: 1pt solid #000000 !important;
+    border-right: 1pt solid #000000 !important;
     box-sizing: border-box !important;
   }
 
@@ -223,10 +228,11 @@ body {
   .col-print-note {
     width: 16% !important;
     text-align: center !important;
-    font-size: 10pt !important;
+    font-size: 9.5pt !important;
     padding: 6px 4px !important;
     word-break: break-word !important;
     overflow-wrap: break-word !important;
+    border-right: 1.5pt solid #000000 !important;
     box-sizing: border-box !important;
   }
 

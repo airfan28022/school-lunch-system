@@ -125,9 +125,8 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
   const [activeCategoryFilter, setActiveCategoryFilter] = useState<MenuCategory | 'ALL'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Quick inline add state per category
-  const [addingCategory, setAddingCategory] = useState<MenuCategory | null>(null);
-  const [quickMenuName, setQuickMenuName] = useState<string>('');
+  // Quick inline add state per category (Auto-saves on pressing "+" or Enter)
+  const [categoryInputs, setCategoryInputs] = useState<Record<string, string>>({});
 
   // Global add modal/inline form state
   const [isGlobalAddOpen, setIsGlobalAddOpen] = useState<boolean>(false);
@@ -204,17 +203,20 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
     return counts;
   }, [menuBank]);
 
-  // Handle Quick Add directly inside a category column
-  const handleQuickAdd = async (category: MenuCategory) => {
-    if (!quickMenuName.trim()) return;
+  // Handle Quick Add directly inside a category column (Auto-save on "+" or Enter)
+  const handleQuickAdd = async (category: MenuCategory, explicitText?: string) => {
+    const textToSave = (explicitText !== undefined ? explicitText : (categoryInputs[category] || '')).trim();
+    if (!textToSave) return;
 
     await onAddMenuItem({
       category: category,
-      menuName: quickMenuName.trim()
+      menuName: textToSave
     });
 
-    setQuickMenuName('');
-    setAddingCategory(null);
+    setCategoryInputs((prev) => ({
+      ...prev,
+      [category]: ''
+    }));
   };
 
   // Handle Global Add
@@ -443,7 +445,7 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
         {displayedCategories.map((category) => {
           const items = categorizedMenus[category] || [];
           const theme = CATEGORY_THEMES[category];
-          const isAddingHere = addingCategory === category;
+          const currentText = categoryInputs[category] || '';
 
           return (
             <div
@@ -462,57 +464,57 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
                   </span>
                 </div>
 
-                {/* Quick Add Button */}
+                {/* Quick Add Button in Header (Auto-saves if text is present, or focuses input) */}
                 <button
                   id={`btn-quick-add-${category}`}
+                  type="button"
                   onClick={() => {
-                    if (isAddingHere) {
-                      setAddingCategory(null);
-                      setQuickMenuName('');
+                    if (currentText.trim()) {
+                      handleQuickAdd(category);
                     } else {
-                      setAddingCategory(category);
-                      setQuickMenuName('');
+                      const inputEl = document.getElementById(`input-quick-add-${category}`) as HTMLInputElement | null;
+                      if (inputEl) inputEl.focus();
                     }
                   }}
-                  title={`เพิ่มเมนูในหมวด ${category}`}
-                  className={`p-1 rounded-lg transition-colors cursor-pointer ${theme.addBtnHover}`}
+                  title={`บันทึกอัตโนมัติในหมวด ${category} (กด + เพื่อบันทึก)`}
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer flex items-center gap-1 ${theme.addBtnHover}`}
                 >
-                  {isAddingHere ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                  <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                 </button>
               </div>
 
-              {/* In-Column Quick Add Input */}
-              {isAddingHere && (
-                <div className="p-2 bg-slate-50 border-b border-slate-200 animate-fadeIn">
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      id={`input-quick-add-${category}`}
-                      type="text"
-                      placeholder={`พิมพ์ชื่อเมนู (${category})...`}
-                      value={quickMenuName}
-                      onChange={(e) => setQuickMenuName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleQuickAdd(category);
-                        } else if (e.key === 'Escape') {
-                          setAddingCategory(null);
-                        }
-                      }}
-                      className="flex-1 px-2.5 py-1 text-xs bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:outline-hidden"
-                      autoFocus
-                    />
-                    <button
-                      onClick={() => handleQuickAdd(category)}
-                      disabled={!quickMenuName.trim()}
-                      className="p-1 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-lg cursor-pointer"
-                      title="เพิ่มเมนู"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+              {/* Dedicated In-Column Quick Add Input with Auto-Save on "+" or Enter */}
+              <div className="p-2 bg-slate-50/90 border-b border-slate-200">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    id={`input-quick-add-${category}`}
+                    type="text"
+                    placeholder={`+ พิมพ์ชื่อเมนู (${category})...`}
+                    value={currentText}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCategoryInputs((prev) => ({ ...prev, [category]: val }));
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleQuickAdd(category);
+                      }
+                    }}
+                    className="flex-1 px-2.5 py-1.5 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 focus:outline-hidden transition-all shadow-2xs"
+                  />
+                  <button
+                    id={`btn-quick-add-submit-${category}`}
+                    type="button"
+                    onClick={() => handleQuickAdd(category)}
+                    disabled={!currentText.trim()}
+                    className="p-1.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold flex items-center justify-center cursor-pointer shrink-0 transition-colors shadow-2xs"
+                    title="บันทึกอัตโนมัติ (+)"
+                  >
+                    <Plus className="w-4 h-4 stroke-[2.5]" />
+                  </button>
                 </div>
-              )}
+              </div>
 
               {/* Items List (Minimalist, Compact Rows) */}
               <div className="p-2 space-y-1 max-h-[520px] overflow-y-auto">
@@ -520,10 +522,14 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
                   <div className="py-8 text-center text-slate-400">
                     <p className="text-[11px]">ไม่มีรายการ</p>
                     <button
-                      onClick={() => setAddingCategory(category)}
+                      type="button"
+                      onClick={() => {
+                        const inputEl = document.getElementById(`input-quick-add-${category}`) as HTMLInputElement | null;
+                        if (inputEl) inputEl.focus();
+                      }}
                       className="mt-1 text-[11px] text-orange-600 hover:underline font-medium cursor-pointer"
                     >
-                      + เพิ่มเมนูแรก
+                      + พิมพ์เพิ่มเมนูแรก
                     </button>
                   </div>
                 ) : (
