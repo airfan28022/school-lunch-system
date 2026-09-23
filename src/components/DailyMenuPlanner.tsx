@@ -41,6 +41,7 @@ const THAI_MONTH_SHORT = [
 ];
 
 const THAI_DAY_NAMES = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+const THAI_DAY_SHORT = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
 
 export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   dailyMenus,
@@ -165,6 +166,37 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
     const parts = dateStr.split('-').map(Number);
     const d = new Date(parts[0], parts[1] - 1, parts[2]);
     return `วัน${THAI_DAY_NAMES[d.getDay()]}ที่ ${d.getDate()} ${THAI_MONTH_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`;
+  };
+
+  // Format short date like PrintReport (e.g. จ. 1/9/69)
+  const formatShortDate = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-').map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    const dayShort = THAI_DAY_SHORT[d.getDay()];
+    const dateNum = d.getDate();
+    const monthNum = d.getMonth() + 1;
+    const yearShort = String(d.getFullYear() + 543).slice(-2);
+    return `${dayShort} ${dateNum}/${monthNum}/${yearShort}`;
+  };
+
+  // Format meal list string identical to PrintReport (e.g. ข้าว + กับข้าว หรือ จานเดียว + ของหวาน)
+  const formatMealList = (entry: DailyMenuEntry): string => {
+    if (entry.singleDish) {
+      const parts = [entry.singleDish];
+      if (entry.dessert) parts.push(entry.dessert);
+      return parts.join(' + ');
+    }
+
+    const items = [
+      entry.rice,
+      entry.spicy,
+      entry.nonSpicy,
+      entry.dessert
+    ].filter(Boolean);
+
+    if (items.length === 0) return '-';
+    return items.join(' + ');
   };
 
   // Save handler
@@ -1221,104 +1253,106 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-orange-50/70 border-b border-orange-100 text-orange-950 font-bold">
-                <th className="py-2.5 px-3 rounded-l-lg">วันที่</th>
-                <th className="py-2.5 px-3">ข้าว/จานเดียว</th>
-                <th className="py-2.5 px-3">กับข้าว (ไม่เผ็ด / เผ็ด)</th>
-                <th className="py-2.5 px-3">ผลไม้-ของหวาน</th>
-                <th className="py-2.5 px-3">หมายเหตุ</th>
-                <th className="py-2.5 px-3 text-right rounded-r-lg">จัดการ</th>
+                <th className="py-2.5 px-3 text-center rounded-l-lg whitespace-nowrap w-36 sm:w-44">วันที่</th>
+                <th className="py-2.5 px-4 text-center">รายการอาหาร</th>
+                <th className="py-2.5 px-3 text-center whitespace-nowrap w-36 sm:w-48">หมายเหตุ</th>
+                <th className="py-2.5 px-3 text-center rounded-r-lg whitespace-nowrap w-24">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {dailyMenus.map((entry) => {
-                const isCurrent = entry.date === selectedDate;
-                const parts = entry.date.split('-').map(Number);
-                const d = new Date(parts[0], parts[1] - 1, parts[2]);
-                const isMonday = d.getDay() === 1;
+              {dailyMenus.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-slate-400">
+                    ยังไม่มีรายการอาหารที่บันทึกไว้ในระบบ สามารถเริ่มสุ่มหรือกรอกเมนูได้จากด้านบน
+                  </td>
+                </tr>
+              ) : (
+                dailyMenus.map((entry) => {
+                  const isCurrent = entry.date === selectedDate;
+                  const parts = entry.date.split('-').map(Number);
+                  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                  const isMonday = d.getDay() === 1;
+                  const mealString = formatMealList(entry);
 
-                return (
-                  <tr
-                    key={entry.date}
-                    onClick={() => handleEditEntry(entry)}
-                    className={`cursor-pointer transition-colors ${
-                      isCurrent
-                        ? 'bg-orange-100/60 font-medium'
-                        : isMonday
-                        ? 'bg-amber-50/50 hover:bg-amber-100/40'
-                        : 'hover:bg-slate-50'
-                    }`}
-                  >
-                    <td className="py-2.5 px-3 whitespace-nowrap">
-                      <div className="font-semibold text-slate-900 flex items-center gap-1.5">
-                        {isMonday && (
-                          <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="วันจันทร์ (เริ่มต้นสัปดาห์)" />
-                        )}
-                        <span>{formatThaiDisplay(entry.date)}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400">{entry.date}</div>
-                    </td>
-                    <td className="py-2.5 px-3 max-w-[180px] truncate text-slate-700">
-                      {entry.singleDish ? (
-                        <span className="font-medium text-orange-800">
-                          [จานเดียว] {entry.singleDish}
-                        </span>
-                      ) : entry.rice ? (
-                        entry.rice
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td className="py-2.5 px-3 max-w-[220px] truncate text-slate-700">
-                      {[entry.nonSpicy, entry.spicy].filter(Boolean).join(' + ') || '-'}
-                    </td>
-                    <td className="py-2.5 px-3 max-w-[160px] truncate text-slate-700">
-                      {entry.dessert || '-'}
-                    </td>
-                    <td className="py-2.5 px-3 max-w-[140px] truncate text-slate-500">
-                      {entry.note || '-'}
-                    </td>
-                    <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                      <div 
-                        className="flex items-center justify-end gap-1"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {/* Copy icon */}
-                        <button
-                          type="button"
-                          id={`btn-copy-to-form-${entry.date}`}
-                          onClick={() => handleCopyDirectToForm(entry)}
-                          className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                          title="คัดลอกไปใส่ตรงรายการอาหารเลย"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
+                  return (
+                    <tr
+                      key={entry.date}
+                      onClick={() => handleEditEntry(entry)}
+                      className={`cursor-pointer transition-colors ${
+                        isCurrent
+                          ? 'bg-orange-100/60 font-medium'
+                          : isMonday
+                          ? 'bg-amber-50/50 hover:bg-amber-100/40'
+                          : 'hover:bg-slate-50'
+                      }`}
+                    >
+                      {/* 1. วันที่: รูปแบบสั้นเหมือนรายงานพิมพ์ (จ. 1/9/69) พร้อมวันที่เต็ม */}
+                      <td className="py-2.5 px-3 whitespace-nowrap text-center">
+                        <div className="font-bold text-slate-900 flex items-center justify-center gap-1.5">
+                          {isMonday && (
+                            <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="วันจันทร์ (เริ่มต้นสัปดาห์)" />
+                          )}
+                          <span>{formatShortDate(entry.date)}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-normal">
+                          {formatThaiDisplay(entry.date)}
+                        </div>
+                      </td>
 
-                        {/* Edit icon */}
-                        <button
-                          type="button"
-                          id={`btn-edit-entry-${entry.date}`}
-                          onClick={() => handleEditEntry(entry)}
-                          className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
-                          title="แก้ไขรายการอาหารวันนี้"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
+                      {/* 2. รายการอาหาร: แสดงตรงตามพิมพ์รายงาน เช่น ข้าวสวย + แกงเผ็ด + แกงจืด + ผลไม้ หรือ ข้าวมันไก่ + ผลไม้ */}
+                      <td className="py-2.5 px-4 text-slate-800 font-medium leading-relaxed">
+                        {mealString}
+                      </td>
 
-                        {/* Delete icon */}
-                        <button
-                          type="button"
-                          id={`btn-delete-entry-${entry.date}`}
-                          onClick={() => handleDeleteEntry(entry.date)}
-                          className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                          title="ลบรายการอาหารวันนี้"
+                      {/* 3. หมายเหตุ */}
+                      <td className="py-2.5 px-3 text-center text-slate-500 text-xs">
+                        {entry.note || '-'}
+                      </td>
+
+                      {/* 4. จัดการ */}
+                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                        <div 
+                          className="flex items-center justify-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                          {/* Copy icon */}
+                          <button
+                            type="button"
+                            id={`btn-copy-to-form-${entry.date}`}
+                            onClick={() => handleCopyDirectToForm(entry)}
+                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="คัดลอกไปใส่ตรงรายการอาหารเลย"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+
+                          {/* Edit icon */}
+                          <button
+                            type="button"
+                            id={`btn-edit-entry-${entry.date}`}
+                            onClick={() => handleEditEntry(entry)}
+                            className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                            title="แก้ไขรายการอาหารวันนี้"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+
+                          {/* Delete icon */}
+                          <button
+                            type="button"
+                            id={`btn-delete-entry-${entry.date}`}
+                            onClick={() => handleDeleteEntry(entry.date)}
+                            className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="ลบรายการอาหารวันนี้"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
