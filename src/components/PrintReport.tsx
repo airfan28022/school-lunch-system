@@ -101,11 +101,13 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   };
 
   /**
-   * Requirement 1.7: Format meal list as "ข้าว + ผัดเผ็ด + แกงจืด + ส้ม"
+   * Requirement 1.7 & User Request 3:
+   * Format meal list as "ข้าว + ผัดเผ็ด + แกงจืด + ส้ม" or "ข้าวมันไก่ตอน + ผลไม้"
+   * Removed "(อาหารจานเดียว)" from printed/displayed table string
    */
   const formatMealList = (entry: DailyMenuEntry): string => {
     if (entry.singleDish) {
-      const parts = [`${entry.singleDish} (อาหารจานเดียว)`];
+      const parts = [entry.singleDish];
       if (entry.dessert) parts.push(entry.dessert);
       return parts.join(' + ');
     }
@@ -467,191 +469,259 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSaveEdit} className="space-y-4">
-              {/* 1. ข้าว (เชื่อมต่อกับคลังเมนู) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-700">
-                    1. ข้าว
-                  </label>
-                  {riceSuggestions.length > 0 && (
-                    <span className="text-[10px] text-amber-600 flex items-center gap-0.5">
-                      <Sparkles className="w-3 h-3" />
-                      ในคลัง: {riceSuggestions.length} รายการ
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  placeholder="พิมพ์ค้นหาหรือเลือกจากคลังเมนู..."
-                  value={editRice}
-                  onFocus={() => setActiveField('rice')}
-                  onChange={(e) => {
-                    setEditRice(e.target.value);
-                    if (e.target.value.trim()) setEditSingleDish('');
-                  }}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500"
-                />
-                {/* Suggestions pill list */}
-                {riceSuggestions.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-amber-50/50 rounded-xl border border-amber-200/60 max-h-24 overflow-y-auto">
-                    {riceSuggestions.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => {
-                          setEditRice(item.menuName);
-                          setEditSingleDish('');
-                        }}
-                        className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
-                          editRice === item.menuName 
-                            ? 'bg-amber-600 text-white border-amber-600 font-bold' 
-                            : 'bg-white hover:bg-amber-100 hover:border-amber-300 text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        {item.menuName}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+            {/* Requirement 2: Mutual exclusion for Edit Modal */}
+            {(() => {
+              const isSetMealFilled = Boolean(editRice.trim() || editNonSpicy.trim() || editSpicy.trim());
+              const isSingleDishFilled = Boolean(editSingleDish.trim());
 
-              {/* 2. อาหารจานเดียว (เชื่อมต่อกับคลังเมนู) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-700">
-                    2. อาหารจานเดียว (ถ้ามี จะปิดช่องข้าวและกับข้าว)
-                  </label>
-                  {singleDishSuggestions.length > 0 && (
-                    <span className="text-[10px] text-orange-600 flex items-center gap-0.5">
-                      <Sparkles className="w-3 h-3" />
-                      ในคลัง: {singleDishSuggestions.length} รายการ
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  placeholder="เช่น ข้าวมันไก่ตอน, ก๋วยเตี๋ยวหมูสับ..."
-                  value={editSingleDish}
-                  onFocus={() => setActiveField('singleDish')}
-                  onChange={(e) => {
-                    setEditSingleDish(e.target.value);
-                    if (e.target.value.trim()) {
-                      setEditRice('');
-                      setEditNonSpicy('');
-                      setEditSpicy('');
-                    }
-                  }}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500"
-                />
-                {singleDishSuggestions.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-orange-50/50 rounded-xl border border-orange-200/60 max-h-24 overflow-y-auto">
-                    {singleDishSuggestions.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => {
-                          setEditSingleDish(item.menuName);
+              return (
+                <form onSubmit={handleSaveEdit} className="space-y-4">
+                  {/* 1. ข้าว (เชื่อมต่อกับคลังเมนู) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                        1. ข้าว
+                        {isSingleDishFilled && (
+                          <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
+                            (ปิดไม่ให้กรอก เนื่องจากระบุอาหารจานเดียวแล้ว)
+                          </span>
+                        )}
+                      </label>
+                      {riceSuggestions.length > 0 && !isSingleDishFilled && (
+                        <span className="text-[10px] text-amber-600 flex items-center gap-0.5">
+                          <Sparkles className="w-3 h-3" />
+                          ในคลัง: {riceSuggestions.length} รายการ
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder={isSingleDishFilled ? "ปิดไม่ให้กรอก (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "พิมพ์ค้นหาหรือเลือกจากคลังเมนู..."}
+                      value={editRice}
+                      disabled={isSingleDishFilled}
+                      onFocus={() => {
+                        if (!isSingleDishFilled) setActiveField('rice');
+                      }}
+                      onChange={(e) => {
+                        setEditRice(e.target.value);
+                        if (e.target.value.trim()) setEditSingleDish('');
+                      }}
+                      className={`w-full px-3 py-2 text-xs rounded-xl transition-all ${
+                        isSingleDishFilled
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                          : 'bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500'
+                      }`}
+                    />
+                    {/* Suggestions pill list */}
+                    {riceSuggestions.length > 0 && !isSingleDishFilled && (
+                      <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-amber-50/50 rounded-xl border border-amber-200/60 max-h-24 overflow-y-auto">
+                        {riceSuggestions.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              setEditRice(item.menuName);
+                              setEditSingleDish('');
+                            }}
+                            className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
+                              editRice === item.menuName 
+                                ? 'bg-amber-600 text-white border-amber-600 font-bold' 
+                                : 'bg-white hover:bg-amber-100 hover:border-amber-300 text-slate-700 border-slate-200'
+                            }`}
+                          >
+                            {item.menuName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 2. อาหารจานเดียว (เชื่อมต่อกับคลังเมนู) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span>
+                        2. อาหารจานเดียว
+                        {isSetMealFilled && (
+                          <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
+                            (ปิดไม่ให้กรอก เนื่องจากระบุข้าวหรือกับข้าวแล้ว)
+                          </span>
+                        )}
+                      </label>
+                      {singleDishSuggestions.length > 0 && !isSetMealFilled && (
+                        <span className="text-[10px] text-orange-600 flex items-center gap-0.5">
+                          <Sparkles className="w-3 h-3" />
+                          ในคลัง: {singleDishSuggestions.length} รายการ
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder={isSetMealFilled ? "ปิดไม่ให้กรอก (เนื่องจากระบุข้าวหรือกับข้าวแล้ว)" : "เช่น ข้าวมันไก่ตอน, ก๋วยเตี๋ยวหมูสับ..."}
+                      value={editSingleDish}
+                      disabled={isSetMealFilled}
+                      onFocus={() => {
+                        if (!isSetMealFilled) setActiveField('singleDish');
+                      }}
+                      onChange={(e) => {
+                        setEditSingleDish(e.target.value);
+                        if (e.target.value.trim()) {
                           setEditRice('');
                           setEditNonSpicy('');
                           setEditSpicy('');
-                        }}
-                        className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
-                          editSingleDish === item.menuName 
-                            ? 'bg-orange-600 text-white border-orange-600 font-bold' 
-                            : 'bg-white hover:bg-orange-100 hover:border-orange-300 text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        {item.menuName}
-                      </button>
-                    ))}
+                        }
+                      }}
+                      className={`w-full px-3 py-2 text-xs rounded-xl transition-all ${
+                        isSetMealFilled
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                          : 'bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500'
+                      }`}
+                    />
+                    {singleDishSuggestions.length > 0 && !isSetMealFilled && (
+                      <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-orange-50/50 rounded-xl border border-orange-200/60 max-h-24 overflow-y-auto">
+                        {singleDishSuggestions.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              setEditSingleDish(item.menuName);
+                              setEditRice('');
+                              setEditNonSpicy('');
+                              setEditSpicy('');
+                            }}
+                            className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
+                              editSingleDish === item.menuName 
+                                ? 'bg-orange-600 text-white border-orange-600 font-bold' 
+                                : 'bg-white hover:bg-orange-100 hover:border-orange-300 text-slate-700 border-slate-200'
+                            }`}
+                          >
+                            {item.menuName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* 3. อาหารไม่เผ็ด (เชื่อมต่อกับคลังเมนู) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-700">
-                    3. อาหารไม่เผ็ด
-                  </label>
-                  {nonSpicySuggestions.length > 0 && (
-                    <span className="text-[10px] text-emerald-600 flex items-center gap-0.5">
-                      <Sparkles className="w-3 h-3" />
-                      ในคลัง: {nonSpicySuggestions.length} รายการ
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  placeholder="เช่น ต้มจืดเต้าหู้หมูสับ, ไข่พะโล้..."
-                  value={editNonSpicy}
-                  onFocus={() => setActiveField('nonSpicy')}
-                  disabled={Boolean(editSingleDish.trim())}
-                  onChange={(e) => setEditNonSpicy(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:bg-slate-100"
-                />
-                {nonSpicySuggestions.length > 0 && !editSingleDish.trim() && (
-                  <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-emerald-50/50 rounded-xl border border-emerald-200/60 max-h-24 overflow-y-auto">
-                    {nonSpicySuggestions.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setEditNonSpicy(item.menuName)}
-                        className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
-                          editNonSpicy === item.menuName 
-                            ? 'bg-emerald-600 text-white border-emerald-600 font-bold' 
-                            : 'bg-white hover:bg-emerald-100 hover:border-emerald-300 text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        {item.menuName}
-                      </button>
-                    ))}
+                  {/* 3. อาหารไม่เผ็ด (เชื่อมต่อกับคลังเมนู) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                        3. อาหารไม่เผ็ด
+                        {isSingleDishFilled && (
+                          <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
+                            (ปิดไม่ให้กรอก เนื่องจากระบุอาหารจานเดียวแล้ว)
+                          </span>
+                        )}
+                      </label>
+                      {nonSpicySuggestions.length > 0 && !isSingleDishFilled && (
+                        <span className="text-[10px] text-emerald-600 flex items-center gap-0.5">
+                          <Sparkles className="w-3 h-3" />
+                          ในคลัง: {nonSpicySuggestions.length} รายการ
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder={isSingleDishFilled ? "ปิดไม่ให้กรอก (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "เช่น ต้มจืดเต้าหู้หมูสับ, ไข่พะโล้..."}
+                      value={editNonSpicy}
+                      onFocus={() => {
+                        if (!isSingleDishFilled) setActiveField('nonSpicy');
+                      }}
+                      disabled={isSingleDishFilled}
+                      onChange={(e) => {
+                        setEditNonSpicy(e.target.value);
+                        if (e.target.value.trim()) setEditSingleDish('');
+                      }}
+                      className={`w-full px-3 py-2 text-xs rounded-xl transition-all ${
+                        isSingleDishFilled
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                          : 'bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500'
+                      }`}
+                    />
+                    {nonSpicySuggestions.length > 0 && !isSingleDishFilled && (
+                      <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-emerald-50/50 rounded-xl border border-emerald-200/60 max-h-24 overflow-y-auto">
+                        {nonSpicySuggestions.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              setEditNonSpicy(item.menuName);
+                              setEditSingleDish('');
+                            }}
+                            className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
+                              editNonSpicy === item.menuName 
+                                ? 'bg-emerald-600 text-white border-emerald-600 font-bold' 
+                                : 'bg-white hover:bg-emerald-100 hover:border-emerald-300 text-slate-700 border-slate-200'
+                            }`}
+                          >
+                            {item.menuName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* 4. อาหารเผ็ด (เชื่อมต่อกับคลังเมนู) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-700">
-                    4. อาหารเผ็ด
-                  </label>
-                  {spicySuggestions.length > 0 && (
-                    <span className="text-[10px] text-rose-600 flex items-center gap-0.5">
-                      <Sparkles className="w-3 h-3" />
-                      ในคลัง: {spicySuggestions.length} รายการ
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  placeholder="เช่น ผัดกะเพราหมูสับ, แกงส้มชะอมกุ้ง..."
-                  value={editSpicy}
-                  onFocus={() => setActiveField('spicy')}
-                  disabled={Boolean(editSingleDish.trim())}
-                  onChange={(e) => setEditSpicy(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 disabled:opacity-50 disabled:bg-slate-100"
-                />
-                {spicySuggestions.length > 0 && !editSingleDish.trim() && (
-                  <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-rose-50/50 rounded-xl border border-rose-200/60 max-h-24 overflow-y-auto">
-                    {spicySuggestions.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setEditSpicy(item.menuName)}
-                        className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
-                          editSpicy === item.menuName 
-                            ? 'bg-rose-600 text-white border-rose-600 font-bold' 
-                            : 'bg-white hover:bg-rose-100 hover:border-rose-300 text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        {item.menuName}
-                      </button>
-                    ))}
+                  {/* 4. อาหารเผ็ด (เชื่อมต่อกับคลังเมนู) */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+                        4. อาหารเผ็ด
+                        {isSingleDishFilled && (
+                          <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
+                            (ปิดไม่ให้กรอก เนื่องจากระบุอาหารจานเดียวแล้ว)
+                          </span>
+                        )}
+                      </label>
+                      {spicySuggestions.length > 0 && !isSingleDishFilled && (
+                        <span className="text-[10px] text-rose-600 flex items-center gap-0.5">
+                          <Sparkles className="w-3 h-3" />
+                          ในคลัง: {spicySuggestions.length} รายการ
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder={isSingleDishFilled ? "ปิดไม่ให้กรอก (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "เช่น ผัดกะเพราหมูสับ, แกงส้มชะอมกุ้ง..."}
+                      value={editSpicy}
+                      onFocus={() => {
+                        if (!isSingleDishFilled) setActiveField('spicy');
+                      }}
+                      disabled={isSingleDishFilled}
+                      onChange={(e) => {
+                        setEditSpicy(e.target.value);
+                        if (e.target.value.trim()) setEditSingleDish('');
+                      }}
+                      className={`w-full px-3 py-2 text-xs rounded-xl transition-all ${
+                        isSingleDishFilled
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+                          : 'bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500'
+                      }`}
+                    />
+                    {spicySuggestions.length > 0 && !isSingleDishFilled && (
+                      <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-rose-50/50 rounded-xl border border-rose-200/60 max-h-24 overflow-y-auto">
+                        {spicySuggestions.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              setEditSpicy(item.menuName);
+                              setEditSingleDish('');
+                            }}
+                            className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
+                              editSpicy === item.menuName 
+                                ? 'bg-rose-600 text-white border-rose-600 font-bold' 
+                                : 'bg-white hover:bg-rose-100 hover:border-rose-300 text-slate-700 border-slate-200'
+                            }`}
+                          >
+                            {item.menuName}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
               {/* 5. ผลไม้-ของหวาน (เชื่อมต่อกับคลังเมนู) */}
               <div>
@@ -736,6 +806,8 @@ export const PrintReport: React.FC<PrintReportProps> = ({
                 </div>
               </div>
             </form>
+              );
+            })()}
           </div>
         </div>
       )}

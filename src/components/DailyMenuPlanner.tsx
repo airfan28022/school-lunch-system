@@ -358,29 +358,39 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
 
       const generatedEntries: DailyMenuEntry[] = [];
 
-      // 3. Process each week applying strict constraints
+      // 3. Process each week applying strict constraints:
+      // Requirement: Single dish is ONLY on Wednesday (dayOfWeek === 3)
+      // Requirement: Dessert 2 days per week, remainder 3 days is Fruit
+      // User request: "ของหวานจะอยู่กับอาหารจานเดียวยิ่งดีเลย" -> Pair dessert with Wednesday single dish!
       schoolDaysByWeek.forEach((week) => {
         const days = week.dates;
 
-        // Requirement: Dessert 2 days per week, remainder is Fruit
-        // Determine which 2 days of this week get dessert
         const dessertIndices = new Set<number>();
-        if (days.length <= 2) {
-          dessertIndices.add(0);
-        } else {
-          // Prefer Tuesday (dayOfWeek 2) and Thursday (dayOfWeek 4) if present
+        const wedIdx = days.findIndex((d) => d.getDay() === 3);
+
+        if (wedIdx !== -1) {
+          // Wednesday has Single Dish AND gets Dessert #1!
+          dessertIndices.add(wedIdx);
+
+          // Pick 2nd dessert day from remaining school days (prefer Friday, then Tuesday)
+          const friIdx = days.findIndex((d) => d.getDay() === 5);
           const tueIdx = days.findIndex((d) => d.getDay() === 2);
-          const thuIdx = days.findIndex((d) => d.getDay() === 4);
-          if (tueIdx !== -1 && thuIdx !== -1) {
+          const otherDays = days.map((_, i) => i).filter((i) => i !== wedIdx);
+
+          if (friIdx !== -1 && otherDays.includes(friIdx)) {
+            dessertIndices.add(friIdx);
+          } else if (tueIdx !== -1 && otherDays.includes(tueIdx)) {
             dessertIndices.add(tueIdx);
-            dessertIndices.add(thuIdx);
+          } else if (otherDays.length > 0) {
+            dessertIndices.add(otherDays[0]);
+          }
+        } else {
+          // If Wednesday not in this week (e.g. partial week at month boundary)
+          if (days.length <= 2) {
+            if (days.length > 0) dessertIndices.add(0);
           } else {
-            // Pick 2 random distinct indices
-            const available = days.map((_, i) => i);
-            const first = available.splice(Math.floor(Math.random() * available.length), 1)[0];
-            const second = available.splice(Math.floor(Math.random() * available.length), 1)[0];
-            dessertIndices.add(first);
-            dessertIndices.add(second);
+            dessertIndices.add(0);
+            dessertIndices.add(Math.min(2, days.length - 1));
           }
         }
 
@@ -521,7 +531,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   }, [calViewYear, calViewMonth, dailyMenus, selectedDate]);
 
   // Mutual exclusion states
-  const hasRice = Boolean(rice.trim());
+  const hasSetMeal = Boolean(rice.trim() || nonSpicy.trim() || spicy.trim());
   const hasSingleDish = Boolean(singleDish.trim());
 
   return (
@@ -862,15 +872,15 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           )}
         </div>
 
-        {/* 2. อาหารจานเดียว (Disabled if rice has value) */}
+        {/* 2. อาหารจานเดียว (Disabled if rice/non-spicy/spicy has value) */}
         <div className="relative">
           <div className="flex items-center justify-between mb-1">
             <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span>
               2. อาหารจานเดียว
-              {hasRice && (
+              {hasSetMeal && (
                 <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
-                  (ปิดไม่ให้พิมพ์อัตโนมัติ เนื่องจากระบุข้าวแล้ว)
+                  (ปิดไม่ให้พิมพ์อัตโนมัติ เนื่องจากระบุข้าวหรือกับข้าวแล้ว)
                 </span>
               )}
             </label>
@@ -879,9 +889,9 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           <input
             id="input-menu-single-dish"
             type="text"
-            placeholder={hasRice ? "ปิดไม่ให้พิมพ์อัตโนมัติ (เนื่องจากระบุรายการข้าวแล้ว)" : "พิมพ์ชื่ออาหารจานเดียว เช่น ข้าวมันไก่ตอนสูตรอนามัย..."}
+            placeholder={hasSetMeal ? "ปิดไม่ให้พิมพ์อัตโนมัติ (เนื่องจากระบุข้าวหรือกับข้าวแล้ว)" : "พิมพ์ชื่ออาหารจานเดียว เช่น ข้าวมันไก่ตอนสูตรอนามัย..."}
             value={singleDish}
-            disabled={hasRice}
+            disabled={hasSetMeal}
             onChange={(e) => {
               const val = e.target.value;
               setSingleDish(val);
@@ -892,15 +902,15 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
               }
             }}
             onFocus={() => {
-              if (!hasRice) setActiveSuggestField('singleDish');
+              if (!hasSetMeal) setActiveSuggestField('singleDish');
             }}
             className={`w-full px-3.5 py-2 text-xs rounded-xl transition-all ${
-              hasRice
+              hasSetMeal
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
                 : 'bg-slate-50/50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500'
             }`}
           />
-          {!hasRice && activeSuggestField === 'singleDish' && (
+          {!hasSetMeal && activeSuggestField === 'singleDish' && (
             <div className="mt-1.5 flex flex-wrap gap-1 p-2 bg-orange-50/70 border border-orange-200 rounded-xl">
               <span className="text-[10px] font-semibold text-orange-900 w-full mb-0.5 flex items-center gap-1">
                 <Sparkles className="w-3 h-3 text-orange-600" /> แนะนำจากคลัง:

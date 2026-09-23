@@ -52,7 +52,7 @@ body {
  * ------------------------------------------------------------- */
 @page {
   size: A4 portrait;
-  margin: 8mm 10mm 8mm 10mm;
+  margin: 10mm 12mm 10mm 12mm;
 }
 
 @media print {
@@ -67,6 +67,7 @@ body {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
+    overflow: visible !important;
   }
 
   main {
@@ -74,6 +75,7 @@ body {
     padding: 0 !important;
     max-width: 100% !important;
     width: 100% !important;
+    overflow: visible !important;
   }
 
   .no-print,
@@ -104,6 +106,7 @@ body {
     box-shadow: none !important;
     page-break-inside: auto !important;
     break-inside: auto !important;
+    overflow: visible !important;
   }
 
   /* Print Header styling: MUST avoid break after so table stays with header on Page 1 */
@@ -114,6 +117,7 @@ body {
     text-align: center !important;
     page-break-after: avoid !important;
     break-after: avoid-page !important;
+    width: 100% !important;
   }
 
   .print-header h1 {
@@ -134,14 +138,18 @@ body {
   /* Table: MUST start on Page 1 with header, then split rows onto Page 2 if needed */
   table.a4-print-table {
     width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
     border-collapse: collapse !important;
     margin-top: 0 !important;
+    margin-bottom: 0 !important;
     font-size: 11pt !important;
     line-height: 1.35 !important;
     page-break-before: avoid !important;
     break-before: avoid-page !important;
     page-break-inside: auto !important;
     break-inside: auto !important;
+    box-sizing: border-box !important;
   }
 
   table.a4-print-table thead {
@@ -160,20 +168,22 @@ body {
   table.a4-print-table th {
     background-color: #f1f5f9 !important;
     color: #000000 !important;
-    font-size: 11.5pt !important;
+    font-size: 11pt !important;
     font-weight: bold !important;
-    border: 1.2pt solid #000000 !important;
-    padding: 6px 8px !important;
+    border: 1pt solid #000000 !important;
+    padding: 6px 6px !important;
     text-align: center !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
+    box-sizing: border-box !important;
   }
 
   table.a4-print-table td {
     border: 1pt solid #333333 !important;
-    padding: 6px 8px !important;
+    padding: 6px 6px !important;
     vertical-align: middle !important;
     font-size: 10.5pt !important;
+    box-sizing: border-box !important;
   }
 
   /* Monday row soft yellow weekly separator */
@@ -187,16 +197,23 @@ body {
 
   /* Specific column widths for 3-column table: วันที่, รายการอาหาร, หมายเหตุ */
   .col-print-date {
-    width: 15% !important;
+    width: 17% !important;
     text-align: center !important;
     white-space: nowrap !important;
     font-weight: 700 !important;
     font-size: 10.5pt !important;
+    padding: 6px 4px !important;
+    box-sizing: border-box !important;
   }
 
   .col-print-menu {
-    width: 68% !important;
+    width: 67% !important;
     text-align: left !important;
+    padding: 6px 8px !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    white-space: normal !important;
+    box-sizing: border-box !important;
   }
 
   th.col-print-menu {
@@ -204,9 +221,13 @@ body {
   }
 
   .col-print-note {
-    width: 17% !important;
+    width: 16% !important;
     text-align: center !important;
     font-size: 10pt !important;
+    padding: 6px 4px !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    box-sizing: border-box !important;
   }
 
   .col-print-action {
