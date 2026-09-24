@@ -20,6 +20,9 @@ interface PrintReportProps {
   menuBank?: MenuItem[];
   onSaveDailyMenu?: (entry: DailyMenuEntry) => Promise<boolean> | boolean;
   onDeleteDailyMenu?: (dateStr: string) => Promise<void> | void;
+  initialMonth?: number;
+  initialYear?: number;
+  onNavigateToPlanner?: (date?: string) => void;
 }
 
 export const PrintReport: React.FC<PrintReportProps> = ({
@@ -28,12 +31,90 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   showToast,
   menuBank = [],
   onSaveDailyMenu,
-  onDeleteDailyMenu
+  onDeleteDailyMenu,
+  initialMonth,
+  initialYear,
+  onNavigateToPlanner
 }) => {
-  // Month & Year state
-  const currentDate = new Date();
-  const [selectedYear, setSelectedYear] = useState<number>(currentDate.getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState<number>(currentDate.getMonth() + 1); // 1-12
+  const THAI_MONTHS = [
+    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+  ];
+
+  const THAI_DAY_SHORT = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+
+  // 1. รวมเดือนทั้งหมดที่มีเมนูอยู่ในระบบ เพื่อสร้างแท็บเลือกเดือนแบบด่วนและช่วยเลือกเดือนอัตโนมัติ
+  const availableMonths = useMemo(() => {
+    const monthMap = new Map<string, { year: number; month: number; count: number }>();
+    dailyMenus.forEach((item) => {
+      const parts = item.date.split('-');
+      if (parts.length >= 2) {
+        const y = Number(parts[0]);
+        const m = Number(parts[1]);
+        const key = `${y}-${String(m).padStart(2, '0')}`;
+        const existing = monthMap.get(key);
+        if (existing) {
+          existing.count += 1;
+        } else {
+          monthMap.set(key, { year: y, month: m, count: 1 });
+        }
+      }
+    });
+
+    const list = Array.from(monthMap.entries()).map(([key, val]) => ({
+      key,
+      year: val.year,
+      month: val.month,
+      count: val.count,
+      label: `${THAI_MONTHS[val.month - 1]} ${val.year + 543}`
+    }));
+
+    // เรียงลำดับจากเดือนล่าสุดไปหาเดือนก่อนหน้า
+    list.sort((a, b) => b.key.localeCompare(a.key));
+    return list;
+  }, [dailyMenus]);
+
+  // กำหนดเดือนและปีเริ่มต้น:
+  // ลำดับ 1: ใช้จาก initialYear / initialMonth ถ้ามีส่งเข้ามา (เช่น เพิ่งกดสุ่มในหน้าจัดการ)
+  // ลำดับ 2: ถ้ามีเมนูในระบบ ให้เลือกเดือนล่าสุดที่มีข้อมูล
+  // ลำดับ 3: วันที่ปัจจุบันของเครื่อง
+  const [selectedYear, setSelectedYear] = useState<number>(() => {
+    if (initialYear) return initialYear;
+    if (dailyMenus.length > 0) {
+      const sorted = [...dailyMenus].sort((a, b) => b.date.localeCompare(a.date));
+      const parts = sorted[0].date.split('-').map(Number);
+      if (parts[0]) return parts[0];
+    }
+    return new Date().getFullYear();
+  });
+
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => {
+    if (initialMonth) return initialMonth;
+    if (dailyMenus.length > 0) {
+      const sorted = [...dailyMenus].sort((a, b) => b.date.localeCompare(a.date));
+      const parts = sorted[0].date.split('-').map(Number);
+      if (parts[1]) return parts[1];
+    }
+    return new Date().getMonth() + 1;
+  });
+
+  // ซิงค์เมื่อ initialMonth หรือ initialYear จากภายนอกเปลี่ยน (เช่น ผู้ใช้เพิ่งกดสุ่มเดือนใหม่)
+  React.useEffect(() => {
+    if (initialMonth) setSelectedMonth(initialMonth);
+    if (initialYear) setSelectedYear(initialYear);
+  }, [initialMonth, initialYear]);
+
+  // สลับไปยังเดือนที่มีข้อมูลอัตโนมัติ หากเดือนที่เลือกอยู่ปัจจุบันไม่มีข้อมูลเลย แต่ในระบบมีเดือนอื่นบันทึกไว้
+  React.useEffect(() => {
+    const currentKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+    const hasDataInCurrent = dailyMenus.some((m) => m.date.startsWith(currentKey));
+    if (!hasDataInCurrent && availableMonths.length > 0) {
+      // สลับไปเดือนที่มีข้อมูลมากที่สุดหรือล่าสุดทันที เพื่อไม่ให้หน้าจอว่างเปล่า
+      const best = availableMonths[0];
+      setSelectedYear(best.year);
+      setSelectedMonth(best.month);
+    }
+  }, [dailyMenus, availableMonths]);
   
   // Filter by search
   const [searchFilter, setSearchFilter] = useState<string>('');
@@ -55,12 +136,16 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   const [newDateStr, setNewDateStr] = useState<string>('');
   const [deletingDateStr, setDeletingDateStr] = useState<string | null>(null);
 
-  const THAI_MONTHS = [
-    'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-  ];
-
-  const THAI_DAY_SHORT = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
+  // รายการปีทั้งหมดที่สามารถเลือกได้
+  const availableYears = useMemo(() => {
+    const currentY = new Date().getFullYear();
+    const set = new Set<number>([currentY - 1, currentY, currentY + 1, currentY + 2, selectedYear]);
+    dailyMenus.forEach((m) => {
+      const y = Number(m.date.split('-')[0]);
+      if (y) set.add(y);
+    });
+    return Array.from(set).sort((a, b) => a - b);
+  }, [dailyMenus, selectedYear]);
 
   // Current month prefix (YYYY-MM)
   const monthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
@@ -250,6 +335,53 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   return (
     <div className="space-y-4">
       {/* ------------------------------------------------------------- */}
+      {/* 0. แถบเลือกเดือนด่วน (Quick Month Selector Bar)                */}
+      {/* แสดงเฉพาะเดือนที่มีการบันทึกหรือสุ่มเมนูไว้ในระบบแล้ว               */}
+      {/* ------------------------------------------------------------- */}
+      {availableMonths.length > 0 && (
+        <div className="no-print bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 p-3 sm:p-3.5 rounded-2xl border border-emerald-200/90 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                เดือนที่มีรายการอาหารในระบบ:
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {availableMonths.map((m) => {
+                const isSelected = m.year === selectedYear && m.month === selectedMonth;
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() => {
+                      setSelectedYear(m.year);
+                      setSelectedMonth(m.month);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                      isSelected
+                        ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-600/30'
+                        : 'bg-white hover:bg-emerald-100/70 text-slate-700 border border-slate-200 hover:border-emerald-300'
+                    }`}
+                  >
+                    <span>{m.label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                        isSelected ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {m.count} วัน
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
       {/* Control Bar: Screen Only                                      */}
       {/* ------------------------------------------------------------- */}
       <div className="no-print bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -276,7 +408,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               onChange={(e) => setSelectedYear(Number(e.target.value))}
               className="text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
             >
-              {[selectedYear - 1, selectedYear, selectedYear + 1].map((y) => (
+              {availableYears.map((y) => (
                 <option key={y} value={y}>
                   พ.ศ. {y + 543} ({y})
                 </option>
@@ -360,8 +492,58 @@ export const PrintReport: React.FC<PrintReportProps> = ({
         {/* Table: 3 Main Columns (วันที่, รายการอาหาร, หมายเหตุ)          */}
         {/* ------------------------------------------------------------- */}
         {monthEntries.length === 0 ? (
-          <div className="text-center py-16 border border-dashed border-slate-200 rounded-xl text-slate-400 text-sm">
-            ไม่มีข้อมูลเมนูอาหารในเดือน {thaiMonthName} {buddhistYear}
+          <div>
+            {/* Minimal line for printer */}
+            <div className="screen-only text-center py-12 px-6 border-2 border-dashed border-amber-200 bg-amber-50/60 rounded-2xl text-slate-700 space-y-3 my-4">
+              <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 mx-auto flex items-center justify-center">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <h4 className="text-base font-bold text-slate-900">
+                ยังไม่มีรายการอาหารในเดือน {thaiMonthName} {buddhistYear}
+              </h4>
+              <p className="text-xs text-slate-600 max-w-md mx-auto">
+                หากคุณเพิ่งสุ่มจัดอาหารกลางวัน หรือต้องการดูรายงานของเดือนอื่น สามารถคลิกเลือกเดือนที่มีข้อมูลด้านล่างนี้ได้ทันที:
+              </p>
+
+              {availableMonths.length > 0 && (
+                <div className="pt-2 flex flex-wrap justify-center gap-2">
+                  {availableMonths.map((m) => (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => {
+                        setSelectedYear(m.year);
+                        setSelectedMonth(m.month);
+                      }}
+                      className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>เปิดรายงานเดือน {m.label}</span>
+                      <span className="bg-emerald-700 px-1.5 py-0.5 rounded-full text-[10px] font-semibold">
+                        {m.count} วัน
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {onNavigateToPlanner && (
+                <div className="pt-2 border-t border-amber-200/60 mt-3">
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToPlanner(`${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`)}
+                    className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-md transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-200" />
+                    <span>ไปหน้าสุ่มจัดอาหารกลางวันเดือน {thaiMonthName} {buddhistYear}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Print Fallback */}
+            <div className="hidden print:block text-center py-16 border border-dashed border-slate-300 rounded-xl text-slate-600 text-sm">
+              ไม่มีข้อมูลเมนูอาหารในเดือน {thaiMonthName} {buddhistYear}
+            </div>
           </div>
         ) : (
           <table className="a4-print-table w-full border-collapse text-left">

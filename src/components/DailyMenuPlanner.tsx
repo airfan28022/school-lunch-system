@@ -16,7 +16,8 @@ import {
   Shuffle,
   CalendarDays,
   X,
-  Search
+  Search,
+  Printer
 } from 'lucide-react';
 
 interface DailyMenuPlannerProps {
@@ -29,6 +30,8 @@ interface DailyMenuPlannerProps {
   showToast: (title: string, message?: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
   gasWebAppUrl?: string;
   onUploadImageToDrive?: (fileData: string, fileName: string, mimeType: string, activityName: string, dateStr: string) => Promise<ActivityPhoto>;
+  onNavigateToReport?: (month?: number, year?: number) => void;
+  onActiveMonthYearChange?: (month: number, year: number) => void;
 }
 
 const THAI_MONTH_NAMES = [
@@ -53,7 +56,9 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   onOpenLightbox,
   showToast,
   gasWebAppUrl,
-  onUploadImageToDrive
+  onUploadImageToDrive,
+  onNavigateToReport,
+  onActiveMonthYearChange
 }) => {
   // Helper to format Date to YYYY-MM-DD
   const toDateString = (d: Date) => {
@@ -622,14 +627,17 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
         }
       }
 
-      // นำมุมมองไปที่วันแรกของเดือนที่สุ่ม
+      // นำมุมมองไปที่วันแรกของเดือนที่สุ่ม และซิงค์เดือนไปยังหน้ารายงาน
       if (generatedEntries.length > 0) {
         setSelectedDate(generatedEntries[0].date);
+      }
+      if (onActiveMonthYearChange) {
+        onActiveMonthYearChange(randomMonth, randomYear);
       }
 
       showToast(
         'สุ่มจัดอาหารกลางวันสำเร็จ!',
-        `จัดเมนูหลากหลาย ${generatedEntries.length} วันทำการ ประจำเดือน ${THAI_MONTH_NAMES[randomMonth - 1]} ${randomYear + 543} เรียบร้อย (กระจายเมนูไม่ซ้ำในสัปดาห์ และสดใหม่จากเดือนก่อน)`,
+        `จัดเมนูหลากหลาย ${generatedEntries.length} วันทำการ ประจำเดือน ${THAI_MONTH_NAMES[randomMonth - 1]} ${randomYear + 543} เรียบร้อย สามารถดูหน้ารายงาน พิมพ์ หรือแก้ไขได้ทันที`,
         'success'
       );
     } catch (err: any) {
@@ -821,6 +829,18 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-amber-200" />
               <span>{isRandomizing ? 'กำลังจัดเมนู...' : 'สุ่มจัดอาหารกลางวันทั้งเดือน'}</span>
             </button>
+
+            {onNavigateToReport && (
+              <button
+                type="button"
+                onClick={() => onNavigateToReport(randomMonth, randomYear)}
+                className="px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl shadow-2xs hover:shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                title="ไปหน้าพิมพ์รายงานประจำเดือนที่เลือก เพื่อตรวจสอบ แก้ไข หรือพิมพ์"
+              >
+                <Printer className="w-3.5 h-3.5 text-emerald-600" />
+                <span>พิมพ์รายงาน</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

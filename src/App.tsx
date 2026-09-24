@@ -99,6 +99,26 @@ export default function App() {
   // Ref to track last updated timestamp from server to prevent overwrite loops
   const lastServerTimestampRef = useRef<string>('');
 
+  // Active / Targeted Month & Year for Report & Planner synchronization
+  const [activeReportMonth, setActiveReportMonth] = useState<number>(() => {
+    const d = new Date();
+    return d.getMonth() + 1;
+  });
+  const [activeReportYear, setActiveReportYear] = useState<number>(() => {
+    const d = new Date();
+    return d.getFullYear();
+  });
+
+  const handleNavigateToReport = (month?: number, year?: number) => {
+    if (month) setActiveReportMonth(month);
+    if (year) setActiveReportYear(year);
+    setActiveTab('report');
+  };
+
+  const handleNavigateToPlanner = (_date?: string) => {
+    setActiveTab('planner');
+  };
+
   // Sync to localStorage as client cache
   useEffect(() => {
     try {
@@ -329,13 +349,27 @@ export default function App() {
   };
 
   const handleBatchSaveDailyMenus = async (entries: DailyMenuEntry[]): Promise<boolean> => {
-    const map = new Map(dailyMenus.map((m) => [m.date, m]));
-    entries.forEach((e) => map.set(e.date, e));
-    const updated = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
-    setDailyMenus(updated);
+    if (entries.length > 0) {
+      const [y, m] = entries[0].date.split('-').map(Number);
+      if (y && m) {
+        setActiveReportYear(y);
+        setActiveReportMonth(m);
+      }
+    }
+
+    let updatedMenus: DailyMenuEntry[] = [];
+    setDailyMenus((prev) => {
+      const map = new Map(prev.map((m) => [m.date, m]));
+      entries.forEach((e) => map.set(e.date, e));
+      updatedMenus = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+      return updatedMenus;
+    });
 
     // ซิงค์ทั้งเดือนด้วย High-speed Batch mode (ครั้งเดียวจบ ไม่วนลูป 20 ครั้ง)
-    await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updatedMenus, syncToGas: true });
+    if (saveRes && saveRes.lastUpdated) {
+      lastServerTimestampRef.current = saveRes.lastUpdated;
+    }
     return true;
   };
 
@@ -600,6 +634,11 @@ export default function App() {
             showToast={showToast}
             gasWebAppUrl={settings.gasWebAppUrl}
             onUploadImageToDrive={handleUploadImageToDrive}
+            onNavigateToReport={handleNavigateToReport}
+            onActiveMonthYearChange={(m, y) => {
+              setActiveReportMonth(m);
+              setActiveReportYear(y);
+            }}
           />
         )}
 
@@ -621,6 +660,9 @@ export default function App() {
             menuBank={menuBank}
             onSaveDailyMenu={handleSaveDailyMenu}
             onDeleteDailyMenu={handleDeleteDailyMenu}
+            initialMonth={activeReportMonth}
+            initialYear={activeReportYear}
+            onNavigateToPlanner={handleNavigateToPlanner}
           />
         )}
 
