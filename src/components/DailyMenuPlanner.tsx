@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { DailyMenuEntry, MenuItem, ActivityPhoto, MenuCategory } from '../types';
 import { INITIAL_MENU_BANK } from '../data/initialData';
 import { ConfirmModal } from './ConfirmModal';
@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   Shuffle,
   CalendarDays,
-  X
+  X,
+  Search
 } from 'lucide-react';
 
 interface DailyMenuPlannerProps {
@@ -72,6 +73,9 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   const [randomMonth, setRandomMonth] = useState<number>(curMonth || (new Date().getMonth() + 1));
   const [randomYear, setRandomYear] = useState<number>(curYear || new Date().getFullYear());
   const [isRandomizing, setIsRandomizing] = useState<boolean>(false);
+
+  // Search query for saved calendar menus table (for finding menus to copy)
+  const [calendarSearchQuery, setCalendarSearchQuery] = useState<string>('');
 
   // Calendar Popover State
   const [isCalendarOpen, setIsCalendarOpen] = useState<boolean>(false);
@@ -333,10 +337,12 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   };
 
   // -------------------------------------------------------------------------
-  // Requirement 3: Monthly Menu Randomizer Engine
-  // - Single dish: exactly 1 day per week (on Wednesday)
-  // - Dessert: 2 days per week
-  // - Remaining days: Fruit
+  // Requirement 3: Monthly Menu Randomizer Engine (ระบบสุ่มจัดอาหารกลางวัน)
+  // - ความหลากหลายสูง ป้องกันความเบื่อ: แต่ละสัปดาห์ในเดือนมีเมนูที่หลากหลายไม่ซ้ำกัน
+  // - เชื่อมโยงกับเดือนที่แล้ว: ตรวจสอบเมนูเดือนก่อนหน้า ลดการสุ่มเมนูที่เพิ่งกินบ่อยในเดือนก่อน โดยเฉพาะสัปดาห์แรก
+  // - วันพุธ: อาหารจานเดียว + ขนมหวานหรือผลไม้ (หมุนเวียนไม่ซ้ำกันทุกวันพุธ)
+  // - วันจันทร์, อังคาร, พฤหัสบดี, ศุกร์: ข้าว + กับข้าวเผ็ด + กับข้าวไม่เผ็ด + ขนมหวานหรือผลไม้
+  // - ของหวาน: สลับ 2 วันต่อสัปดาห์ กับ 1 วันต่อสัปดาห์ วันที่เหลือเป็นผลไม้สด
   // -------------------------------------------------------------------------
   const executeRandomizeMonth = async () => {
     setIsRandomizing(true);
@@ -366,7 +372,30 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
       const dessertBank = menuBank.filter((m) => m.category === 'ของหวาน' || (m.category === 'ผลไม้-ของหวาน' && isDessertName(m.menuName)));
       const dessertItems = dessertBank.length > 0 ? dessertBank : INITIAL_MENU_BANK.filter((m) => m.category === 'ของหวาน');
 
-      // 2. Gather all school days (Mon-Fri) in the selected month & year
+      // 2. ดึงข้อมูลเมนูของ "เดือนที่แล้ว" เพื่อนำมาคำนวณความหลากหลาย ให้แตกต่างจากเดือนก่อน
+      const prevYear = randomMonth === 1 ? randomYear - 1 : randomYear;
+      const prevMonth = randomMonth === 1 ? 12 : randomMonth - 1;
+      const prevMonthPrefix = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+      const prevMonthEntries = dailyMenus.filter((m) => m.date.startsWith(prevMonthPrefix));
+
+      const prevMonthDishCounts = new Map<string, number>();
+      const prevWedSingleDishes = new Set<string>();
+
+      prevMonthEntries.forEach((entry) => {
+        const parts = entry.date.split('-').map(Number);
+        const dayOfWeek = new Date(parts[0], parts[1] - 1, parts[2]).getDay();
+        if (dayOfWeek === 3 && entry.singleDish) {
+          prevWedSingleDishes.add(entry.singleDish.trim());
+        }
+        [entry.rice, entry.singleDish, entry.nonSpicy, entry.spicy, entry.dessert].forEach((dish) => {
+          if (dish && dish.trim()) {
+            const clean = dish.trim();
+            prevMonthDishCounts.set(clean, (prevMonthDishCounts.get(clean) || 0) + 1);
+          }
+        });
+      });
+
+      // 3. รวบรวมวันทำการเรียน (จันทร์-ศุกร์) ทั้งหมดในเดือนที่เลือก แยกเป็นสัปดาห์
       const daysInMonth = new Date(randomYear, randomMonth, 0).getDate();
       const schoolDaysByWeek: { weekNumber: number; dates: Date[] }[] = [];
 
@@ -375,9 +404,8 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
         const d = new Date(randomYear, randomMonth - 1, day);
         const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
 
-        // Only Monday (1) to Friday (5)
+        // เฉพาะวันจันทร์ (1) ถึง วันศุกร์ (5)
         if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-          // If Monday and we already have days, start a new week
           if (dayOfWeek === 1 && currentWeek.length > 0) {
             schoolDaysByWeek.push({ weekNumber: schoolDaysByWeek.length + 1, dates: currentWeek });
             currentWeek = [];
@@ -389,71 +417,130 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
         schoolDaysByWeek.push({ weekNumber: schoolDaysByWeek.length + 1, dates: currentWeek });
       }
 
-      // Random picker helper avoiding immediate repeat
-      const getRandom = (arr: MenuItem[], prevName?: string): string => {
-        if (!arr || arr.length === 0) return '';
-        const filtered = arr.filter((x) => x.menuName !== prevName);
-        const pool = filtered.length > 0 ? filtered : arr;
-        return pool[Math.floor(Math.random() * pool.length)].menuName;
-      };
+      // ระบบติดตามความถี่และระยะห่างของเมนู เพื่อป้องกันความซ้ำซาก
+      const usedInMonthCount = new Map<string, number>();
+      const lastUsedSchoolDayIndex = new Map<string, number>();
+      const wedSingleDishesInMonth = new Set<string>();
+      let totalSchoolDaysCount = 0;
 
-      let lastRice = '';
-      let lastSingleDish = '';
-      let lastNonSpicy = '';
-      let lastSpicy = '';
-      let lastDessert = '';
-      let lastFruit = '';
+      // ฟังก์ชันสุ่มแบบถ่วงน้ำหนัก (Smart Diverse Picker):
+      // - ป้องกันการซ้ำในสัปดาห์เดียวกันเด็ดขาด
+      // - หลีกเลี่ยงเมนูที่เพิ่งกินไปในรอบ 1-2 สัปดาห์
+      // - ลดความซ้ำจากเมนูที่ออกบ่อยในเดือนที่แล้ว โดยเฉพาะสัปดาห์แรกของเดือนใหม่
+      // - อาหารจานเดียววันพุธจะไม่ซ้ำกันทุกวันพุธในเดือนนั้น
+      const pickDiverseItem = (
+        pool: MenuItem[],
+        currentWeekDishes: Set<string>,
+        options?: {
+          isWednesdaySingleDish?: boolean;
+          isWeek1?: boolean;
+          schoolDayIndex?: number;
+        }
+      ): string => {
+        if (!pool || pool.length === 0) return '';
+        const dayIdx = options?.schoolDayIndex ?? totalSchoolDaysCount;
+        const isWed = Boolean(options?.isWednesdaySingleDish);
+        const isWk1 = Boolean(options?.isWeek1);
+
+        // 1. กรองเมนูที่ใช้ไปแล้วในสัปดาห์นี้ออก เพื่อให้แต่ละสัปดาห์มีความแปลกใหม่หลากหลาย
+        let candidates = pool.filter((item) => !currentWeekDishes.has(item.menuName));
+        if (candidates.length === 0) {
+          candidates = pool;
+        }
+
+        // อาหารจานเดียววันพุธ: หมุนเวียนไม่ซ้ำกันในแต่ละวันพุธของเดือน
+        if (isWed && wedSingleDishesInMonth.size < pool.length) {
+          const unusedInMonth = candidates.filter((item) => !wedSingleDishesInMonth.has(item.menuName));
+          if (unusedInMonth.length > 0) {
+            candidates = unusedInMonth;
+          }
+        }
+
+        // 2. ให้คะแนนความสดใหม่ (Penalty scoring: ยิ่งคะแนนน้อย ยิ่งสดใหม่และน่าเลือก)
+        const scored = candidates.map((item) => {
+          const name = item.menuName;
+          let penalty = 0;
+
+          // ความถี่ในเดือนนี้ (ถ้าเคยกินแล้วจะถูกลดโอกาสลง เพื่อกระจายเมนูอื่นในคลัง)
+          const monthFreq = usedInMonthCount.get(name) || 0;
+          penalty += monthFreq * 25;
+
+          // ระยะห่างวันทำการ (ป้องกันไม่ให้วนกลับมาเร็วเกินไป)
+          if (lastUsedSchoolDayIndex.has(name)) {
+            const daysAgo = dayIdx - (lastUsedSchoolDayIndex.get(name) || 0);
+            if (daysAgo <= 2) penalty += 60;
+            else if (daysAgo <= 5) penalty += 25;
+            else if (daysAgo <= 9) penalty += 10;
+          }
+
+          // ความหลากหลายข้ามเดือน: เมนูที่เดือนที่แล้วกินบ่อย จะได้คะแนนลดลง
+          const prevCount = prevMonthDishCounts.get(name) || 0;
+          penalty += prevCount * 4;
+          if (isWk1 && prevCount > 0) {
+            // สัปดาห์แรกของเดือนใหม่ เปิดด้วยเมนูสดใหม่ที่เดือนก่อนไม่ค่อยได้กิน
+            penalty += prevCount * 8;
+          }
+
+          // วันพุธจานเดียว: ถ้าเป็นเมนูที่เพิ่งเป็นจานเดียววันพุธเดือนก่อน ให้หลีกเลี่ยง
+          if (isWed && prevWedSingleDishes.has(name)) {
+            penalty += 20;
+          }
+
+          // เพิ่มความสุ่มเป็นธรรมชาติ
+          penalty += Math.random() * 3;
+
+          return { name, penalty };
+        });
+
+        scored.sort((a, b) => a.penalty - b.penalty);
+
+        // เลือกสุ่มในกลุ่มที่มีความสดใหม่สูงสุด
+        const minPenalty = scored[0].penalty;
+        const topCandidates = scored.filter((s) => s.penalty <= minPenalty + 3.5);
+        const chosen = topCandidates[Math.floor(Math.random() * topCandidates.length)].name;
+
+        // บันทึกสถิติเพื่อใช้คำนวณวันถัดไป
+        usedInMonthCount.set(chosen, (usedInMonthCount.get(chosen) || 0) + 1);
+        lastUsedSchoolDayIndex.set(chosen, dayIdx);
+        currentWeekDishes.add(chosen);
+        if (isWed) {
+          wedSingleDishesInMonth.add(chosen);
+        }
+
+        return chosen;
+      };
 
       const generatedEntries: DailyMenuEntry[] = [];
 
-      // 3. Process each week applying strict constraints:
-      // - Single dish: exactly 1 day per week, specifically on Wednesday (dayOfWeek === 3)
-      // - ข้าวจานเดียวประกอบด้วย: ข้าวจานเดียว + (ของหวาน หรือ ผลไม้อย่างใดอย่างหนึ่ง)
-      // - ข้าวประกอบด้วย: ข้าว + อาหารเผ็ด + อาหารไม่เผ็ด + (ของหวาน หรือ ผลไม้อย่างใดอย่างหนึ่ง)
-      // - ของหวาน: สลับ 2 วันต่อสัปดาห์ กับ 1 วันต่อสัปดาห์ (สัปดาห์คู่ 2 วัน, สัปดาห์คี่ 1 วัน)
-      // - วันพุธ (อาหารจานเดียว): เน้นของหวาน ใช้ผลไม้บ้างก็ดี
-      // - วันที่เหลือ: จัดเป็นผลไม้สด
+      // 4. วางแผนแต่ละสัปดาห์
       schoolDaysByWeek.forEach((week, weekIdx) => {
         const days = week.dates;
+        const weekDishes = new Set<string>();
+        const isWeek1 = weekIdx === 0;
 
-        // Determine number of dessert days for this week: alternate 2 days and 1 day
-        // e.g. Week 1 (idx 0): 2 days, Week 2 (idx 1): 1 day, Week 3 (idx 2): 2 days, Week 4 (idx 3): 1 day
+        // กำหนดวันของหวาน: สลับ 2 วัน กับ 1 วันต่อสัปดาห์
         const targetDessertCount = (weekIdx % 2 === 0) ? 2 : 1;
-
         const dessertIndices = new Set<number>();
         const wedIdx = days.findIndex((d) => d.getDay() === 3);
 
         if (targetDessertCount === 2) {
-          // 2 dessert days this week
           if (wedIdx !== -1) {
-            dessertIndices.add(wedIdx); // Wednesday single dish pairs with dessert #1!
-
-            // Pick 2nd dessert day from remaining school days (prefer Friday, then Tuesday)
+            dessertIndices.add(wedIdx);
             const otherDays = days.map((_, i) => i).filter((i) => i !== wedIdx);
             const friIdx = days.findIndex((d) => d.getDay() === 5);
             const tueIdx = days.findIndex((d) => d.getDay() === 2);
-
-            if (friIdx !== -1 && otherDays.includes(friIdx)) {
-              dessertIndices.add(friIdx);
-            } else if (tueIdx !== -1 && otherDays.includes(tueIdx)) {
-              dessertIndices.add(tueIdx);
-            } else if (otherDays.length > 0) {
-              dessertIndices.add(otherDays[0]);
-            }
+            if (friIdx !== -1 && otherDays.includes(friIdx)) dessertIndices.add(friIdx);
+            else if (tueIdx !== -1 && otherDays.includes(tueIdx)) dessertIndices.add(tueIdx);
+            else if (otherDays.length > 0) dessertIndices.add(otherDays[0]);
           } else {
-            // Partial week without Wednesday (e.g. month start/end)
             if (days.length > 0) dessertIndices.add(0);
             if (days.length > 1) dessertIndices.add(days.length - 1);
           }
         } else {
-          // 1 dessert day this week: "เน้นของหวาน ใช้ผลไม้บ้างก็ดี"
           if (wedIdx !== -1) {
-            // Mostly Wednesday gets the dessert (weekIdx % 4 !== 3); occasionally (weekIdx % 4 === 3) Wednesday gets Fruit ("ใช้ผลไม้บ้างก็ดี") and another day gets dessert
             const isWedDessert = (weekIdx % 4 !== 3);
-            if (isWedDessert) {
-              dessertIndices.add(wedIdx);
-            } else {
-              // Wednesday gets Fruit today, so assign the 1 dessert to Friday or Tuesday
+            if (isWedDessert) dessertIndices.add(wedIdx);
+            else {
               const friIdx = days.findIndex((d) => d.getDay() === 5);
               const tueIdx = days.findIndex((d) => d.getDay() === 2);
               if (friIdx !== -1) dessertIndices.add(friIdx);
@@ -466,10 +553,9 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
         }
 
         days.forEach((dateObj, idx) => {
+          totalSchoolDaysCount++;
           const dateStr = toDateString(dateObj);
           const dayOfWeek = dateObj.getDay();
-
-          // Single dish 1 day per week, specifically on Wednesday (dayOfWeek === 3)
           const isWednesday = dayOfWeek === 3;
 
           let itemRice = '';
@@ -478,32 +564,40 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           let itemSpicy = '';
           let itemSweet = '';
 
-          // Determine dessert vs fruit for today based on calculated dessertIndices
           const isDessertToday = dessertIndices.has(idx);
-          if (isDessertToday) {
-            itemSweet = getRandom(dessertItems.length > 0 ? dessertItems : fruitItems, lastDessert);
-            lastDessert = itemSweet;
-          } else {
-            itemSweet = getRandom(fruitItems.length > 0 ? fruitItems : dessertItems, lastFruit);
-            lastFruit = itemSweet;
-          }
+          const sweetPool = isDessertToday
+            ? (dessertItems.length > 0 ? dessertItems : fruitItems)
+            : (fruitItems.length > 0 ? fruitItems : dessertItems);
+
+          itemSweet = pickDiverseItem(sweetPool, weekDishes, {
+            schoolDayIndex: totalSchoolDaysCount,
+            isWeek1
+          });
 
           if (isWednesday) {
-            // Requirement: Single Dish + (Dessert OR Fruit)
-            itemSingleDish = getRandom(singleDishItems, lastSingleDish);
-            lastSingleDish = itemSingleDish;
+            // วันพุธ: อาหารจานเดียว + ของหวานหรือผลไม้ (หมุนเวียนสดใหม่)
+            itemSingleDish = pickDiverseItem(singleDishItems, weekDishes, {
+              isWednesdaySingleDish: true,
+              schoolDayIndex: totalSchoolDaysCount,
+              isWeek1
+            });
             itemRice = '';
             itemNonSpicy = '';
             itemSpicy = '';
           } else {
-            // Requirement: Rice + Spicy + Non-Spicy + (Dessert OR Fruit)
-            itemRice = getRandom(riceItems, lastRice);
-            lastRice = itemRice;
-            itemSingleDish = '';
-            itemNonSpicy = getRandom(nonSpicyItems, lastNonSpicy);
-            lastNonSpicy = itemNonSpicy;
-            itemSpicy = getRandom(spicyItems, lastSpicy);
-            lastSpicy = itemSpicy;
+            // วันจันทร์, อังคาร, พฤหัสบดี, ศุกร์: ข้าว + กับข้าวเผ็ด + กับข้าวไม่เผ็ด + ของหวานหรือผลไม้
+            itemRice = pickDiverseItem(riceItems, weekDishes, {
+              schoolDayIndex: totalSchoolDaysCount,
+              isWeek1
+            });
+            itemNonSpicy = pickDiverseItem(nonSpicyItems, weekDishes, {
+              schoolDayIndex: totalSchoolDaysCount,
+              isWeek1
+            });
+            itemSpicy = pickDiverseItem(spicyItems, weekDishes, {
+              schoolDayIndex: totalSchoolDaysCount,
+              isWeek1
+            });
           }
 
           generatedEntries.push({
@@ -519,7 +613,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
         });
       });
 
-      // 4. Save to state and GAS
+      // 5. บันทึกลงระบบส่วนกลาง
       if (onBatchSaveDailyMenus) {
         await onBatchSaveDailyMenus(generatedEntries);
       } else {
@@ -528,14 +622,14 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
         }
       }
 
-      // Jump view to the first generated school day
+      // นำมุมมองไปที่วันแรกของเดือนที่สุ่ม
       if (generatedEntries.length > 0) {
         setSelectedDate(generatedEntries[0].date);
       }
 
       showToast(
         'สุ่มจัดอาหารกลางวันสำเร็จ!',
-        `จัดเมนูเรียบร้อย ${generatedEntries.length} วันทำการ ประจำเดือน ${THAI_MONTH_NAMES[randomMonth - 1]} ${randomYear + 543} (วันพุธจานเดียว, ขนมหวาน 2 วัน/สัปดาห์, ผลไม้ส่วนที่เหลือ)`,
+        `จัดเมนูหลากหลาย ${generatedEntries.length} วันทำการ ประจำเดือน ${THAI_MONTH_NAMES[randomMonth - 1]} ${randomYear + 543} เรียบร้อย (กระจายเมนูไม่ซ้ำในสัปดาห์ และสดใหม่จากเดือนก่อน)`,
         'success'
       );
     } catch (err: any) {
@@ -629,6 +723,36 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   // Mutual exclusion states
   const hasSetMeal = Boolean(rice.trim() || nonSpicy.trim() || spicy.trim());
   const hasSingleDish = Boolean(singleDish.trim());
+
+  // Filtered entries for saved calendar menus based on user's search query (for quick menu copying)
+  const filteredCalendarEntries = useMemo(() => {
+    if (!calendarSearchQuery.trim()) return dailyMenus;
+    const q = calendarSearchQuery.toLowerCase().trim();
+    return dailyMenus.filter((entry) => {
+      const meal = formatMealList(entry).toLowerCase();
+      const thaiDate = formatThaiDisplay(entry.date).toLowerCase();
+      const shortDate = formatShortDate(entry.date).toLowerCase();
+      const note = (entry.note || '').toLowerCase();
+      const rawDate = entry.date.toLowerCase();
+      const r = (entry.rice || '').toLowerCase();
+      const sd = (entry.singleDish || '').toLowerCase();
+      const ns = (entry.nonSpicy || '').toLowerCase();
+      const sp = (entry.spicy || '').toLowerCase();
+      const ds = (entry.dessert || '').toLowerCase();
+      return (
+        rawDate.includes(q) ||
+        meal.includes(q) ||
+        thaiDate.includes(q) ||
+        shortDate.includes(q) ||
+        note.includes(q) ||
+        r.includes(q) ||
+        sd.includes(q) ||
+        ns.includes(q) ||
+        sp.includes(q) ||
+        ds.includes(q)
+      );
+    });
+  }, [dailyMenus, calendarSearchQuery]);
 
   return (
     <div className="space-y-4">
@@ -1241,14 +1365,40 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
       {/* 4. Calendar Summary Table of Saved Menus                      */}
       {/* ------------------------------------------------------------- */}
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-sm font-bold text-slate-900">
-              ปฏิทินเมนูที่บันทึกแล้วในระบบ ({dailyMenus.length} วัน)
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <span>ปฏิทินเมนูที่บันทึกแล้วในระบบ</span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-semibold">
+                {calendarSearchQuery.trim() ? `พบ ${filteredCalendarEntries.length} จาก ${dailyMenus.length} วัน` : `${dailyMenus.length} วัน`}
+              </span>
             </h3>
             <p className="text-xs text-slate-500">
-              คลิกแถวเพื่อดูข้อมูล หรือใช้ไอคอน คัดลอก แก้ไข ลบ ในคอลัมน์ขวาสุด
+              ค้นหาเมนูที่ต้องการ แล้วกดปุ่ม <span className="text-blue-600 font-semibold">"คัดลอก"</span> เพื่อนำไปใส่ในวันที่กำลังจัดเมนูด้านบนได้ทันที
             </p>
+          </div>
+
+          {/* Search Box for Menus to Copy */}
+          <div className="relative w-full sm:w-80">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              id="input-search-calendar-menu"
+              value={calendarSearchQuery}
+              onChange={(e) => setCalendarSearchQuery(e.target.value)}
+              placeholder="ค้นหาเมนูเพื่อคัดลอก (เช่น ข้าวมันไก่, แกงส้ม, ต้มยำ)..."
+              className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all outline-none"
+            />
+            {calendarSearchQuery && (
+              <button
+                type="button"
+                onClick={() => setCalendarSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full"
+                title="ล้างคำค้นหา"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -1259,7 +1409,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                 <th className="py-2.5 px-3 text-center rounded-l-lg whitespace-nowrap w-36 sm:w-44">วันที่</th>
                 <th className="py-2.5 px-4 text-center">รายการอาหาร</th>
                 <th className="py-2.5 px-3 text-center whitespace-nowrap w-36 sm:w-48">หมายเหตุ</th>
-                <th className="py-2.5 px-3 text-center rounded-r-lg whitespace-nowrap w-24">จัดการ</th>
+                <th className="py-2.5 px-3 text-center rounded-r-lg whitespace-nowrap w-28">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1269,8 +1419,17 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                     ยังไม่มีรายการอาหารที่บันทึกไว้ในระบบ สามารถเริ่มสุ่มหรือกรอกเมนูได้จากด้านบน
                   </td>
                 </tr>
+              ) : filteredCalendarEntries.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="py-8 text-center text-slate-400">
+                    <div className="flex flex-col items-center justify-center gap-1.5">
+                      <p className="font-medium text-slate-600">ไม่พบรายการอาหารที่ตรงกับ "{calendarSearchQuery}"</p>
+                      <p className="text-xs text-slate-400">ลองค้นหาด้วยชื่อเมนูอื่น หรือกดล้างคำค้นหา</p>
+                    </div>
+                  </td>
+                </tr>
               ) : (
-                dailyMenus.map((entry) => {
+                filteredCalendarEntries.map((entry) => {
                   const isCurrent = entry.date === selectedDate;
                   const parts = entry.date.split('-').map(Number);
                   const d = new Date(parts[0], parts[1] - 1, parts[2]);
@@ -1315,18 +1474,22 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                       {/* 4. จัดการ */}
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         <div 
-                          className="flex items-center justify-center gap-1"
+                          className="flex items-center justify-center gap-1.5"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {/* Copy icon */}
                           <button
                             type="button"
                             id={`btn-copy-to-form-${entry.date}`}
-                            onClick={() => handleCopyDirectToForm(entry)}
-                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                            title="คัดลอกไปใส่ตรงรายการอาหารเลย"
+                            onClick={() => {
+                              handleCopyDirectToForm(entry);
+                              showToast('คัดลอกเมนูสำเร็จ!', `นำเมนูของวันที่ ${formatThaiDisplay(entry.date)} มาใส่ในฟอร์มของวันที่ ${formatThaiDisplay(selectedDate)} แล้ว`, 'success');
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-900 border border-blue-200/80 rounded-lg transition-all cursor-pointer text-xs font-semibold shadow-2xs"
+                            title={`คัดลอกเมนูนี้ไปใส่วันที่ ${formatThaiDisplay(selectedDate)}`}
                           >
-                            <Copy className="w-4 h-4" />
+                            <Copy className="w-3.5 h-3.5" />
+                            <span className="text-[11px]">คัดลอก</span>
                           </button>
 
                           {/* Edit icon */}

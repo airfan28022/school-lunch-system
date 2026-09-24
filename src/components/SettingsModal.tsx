@@ -9,7 +9,6 @@ import {
   Image as ImageIcon,
   CheckCircle,
   RefreshCw,
-  User,
   ShieldCheck
 } from 'lucide-react';
 
@@ -31,8 +30,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // Form states
   const [schoolName, setSchoolName] = useState<string>(initialSettings.schoolName || '');
   const [department, setDepartment] = useState<string>(initialSettings.department || '');
-  const [managerName, setManagerName] = useState<string>(initialSettings.managerName || '');
-  const [directorName, setDirectorName] = useState<string>(initialSettings.directorName || '');
   const [logoUrl, setLogoUrl] = useState<string>(initialSettings.logoUrl || '');
 
   // Interaction states
@@ -48,8 +45,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       ...initialSettings,
       schoolName: schoolName.trim(),
       department: department.trim(),
-      managerName: managerName.trim(),
-      directorName: directorName.trim(),
+      managerName: '',
+      directorName: '',
       logoUrl: logoUrl.trim(),
       gasWebAppUrl: initialSettings.gasWebAppUrl || ''
     };
@@ -177,36 +174,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               placeholder="เช่น สังกัดสำนักงานเขตพื้นที่การศึกษาประถมศึกษา..."
               className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
               required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-amber-600" />
-              ผู้จัดทำ / หัวหน้างานโภชนาการ
-            </label>
-            <input
-              id="input-manager-name"
-              type="text"
-              value={managerName}
-              onChange={(e) => setManagerName(e.target.value)}
-              placeholder="เช่น นางกาญจนา มงคลสุข (หัวหน้างานโภชนาการโรงเรียน)"
-              className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-amber-600" />
-              ผู้อำนวยการสถานศึกษา / ผู้บริหาร
-            </label>
-            <input
-              id="input-director-name"
-              type="text"
-              value={directorName}
-              onChange={(e) => setDirectorName(e.target.value)}
-              placeholder="เช่น นายประเสริฐ วัฒนาภิรมย์ (ผู้อำนวยการสถานศึกษา)"
-              className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
             />
           </div>
         </div>
