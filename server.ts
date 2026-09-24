@@ -7,7 +7,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_DIR = path.resolve(__dirname, 'data');
+const DATA_DIR = fs.existsSync(path.resolve(process.cwd(), 'data'))
+  ? path.resolve(process.cwd(), 'data')
+  : path.resolve(__dirname, 'data');
 const STORE_PATH = path.resolve(DATA_DIR, 'store.json');
 
 // Default initial data fallback
@@ -469,16 +471,25 @@ async function startServer() {
   // -----------------------------------------------------------------
   // Vite Dev Middleware or Production Static Serving
   // -----------------------------------------------------------------
-  if (!isProd) {
+  const distPath = fs.existsSync(path.resolve(process.cwd(), 'dist'))
+    ? path.resolve(process.cwd(), 'dist')
+    : path.resolve(__dirname, 'dist');
+
+  if (!isProd && fs.existsSync(path.resolve(process.cwd(), 'vite.config.ts'))) {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
     });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+    app.use(express.static(distPath));
     app.get('*', (_req, res) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      const indexPath = path.resolve(distPath, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        res.status(404).send('Not Found');
+      }
     });
   }
 
