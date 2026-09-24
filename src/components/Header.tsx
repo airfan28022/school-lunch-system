@@ -12,7 +12,8 @@ import {
   Cloud,
   Database,
   Menu as MenuIcon,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -20,13 +21,17 @@ interface HeaderProps {
   activeTab: 'repository' | 'planner' | 'report' | 'settings';
   onTabChange: (tab: 'repository' | 'planner' | 'report' | 'settings') => void;
   isGasConnected: boolean;
+  isSyncing?: boolean;
+  onManualSync?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   settings,
   activeTab,
   onTabChange,
-  isGasConnected
+  isGasConnected,
+  isSyncing = false,
+  onManualSync
 }) => {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
@@ -128,6 +133,21 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 </div>
               </div>
+
+              {/* High-speed Realtime Sync Button & Badge */}
+              <button
+                id="btn-quick-sync"
+                onClick={onManualSync}
+                disabled={isSyncing}
+                title={isSyncing ? 'กำลังซิงค์ข้อมูล...' : 'ซิงค์ข้อมูลทันที'}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 hover:bg-white text-slate-800 border border-amber-400/80 shadow-2xs hover:shadow-xs transition-all cursor-pointer text-xs font-semibold"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-amber-700 ${isSyncing ? 'animate-spin text-amber-500' : ''}`} />
+                <span className="hidden xl:inline text-[11px] text-slate-700">
+                  {isSyncing ? 'กำลังซิงค์...' : 'ซิงค์ข้อมูล'}
+                </span>
+                <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-ping' : 'bg-emerald-500'}`} />
+              </button>
 
               {/* Top-Right Settings Icon */}
               <button

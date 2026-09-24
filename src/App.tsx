@@ -23,6 +23,9 @@ import {
   callGasPost, 
   fetchServerData,
   saveServerData,
+  saveSingleDailyMenuDirect,
+  saveSingleMenuItemDirect,
+  subscribeToLocalSync,
   uploadLogoToServer,
   uploadPhotoToServer,
   testGasConnection,
@@ -36,6 +39,9 @@ const STORAGE_KEY_DAILY_MENUS = 'school_lunch_daily_menus_v2';
 export default function App() {
   // Navigation active tab
   const [activeTab, setActiveTab] = useState<'planner' | 'repository' | 'report' | 'settings'>('planner');
+
+  // Real-time synchronization state
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
 
   // Core Data States with localStorage persistence as fast-boot cache
   const [settings, setSettings] = useState<SchoolSettings>(() => {
@@ -153,11 +159,39 @@ export default function App() {
     let isMounted = true;
     let isPulling = false;
 
+    // 0. ซิงค์ข้ามแท็บในเครื่องเดียวกันทันทีด้วย BroadcastChannel (0ms ละเอียดระดับเรียลไทม์)
+    const unsubscribeSync = subscribeToLocalSync((event) => {
+      if (!isMounted) return;
+      if (event.type === 'ALL' && event.payload) {
+        if (event.payload.settings) setSettings(event.payload.settings);
+        if (event.payload.menuBank) setMenuBank(event.payload.menuBank);
+        if (event.payload.dailyMenus) setDailyMenus(event.payload.dailyMenus);
+      } else if (event.type === 'DAILY_MENU' && event.payload) {
+        const entry = event.payload;
+        setDailyMenus((prev) => {
+          const idx = prev.findIndex((m) => m.date === entry.date);
+          if (idx >= 0) {
+            const cp = [...prev];
+            cp[idx] = entry;
+            return cp;
+          }
+          return [...prev, entry].sort((a, b) => a.date.localeCompare(b.date));
+        });
+      } else if (event.type === 'MENU_BANK' && event.payload) {
+        const item = event.payload;
+        setMenuBank((prev) => {
+          const exists = prev.some((m) => m.id === item.id);
+          return exists ? prev.map((m) => (m.id === item.id ? item : m)) : [item, ...prev];
+        });
+      }
+    });
+
     const pullServerData = async (isInitial = false) => {
       if (isPulling) return;
       isPulling = true;
+      if (!isInitial) setIsSyncing(true);
       try {
-        const data = await fetchServerData();
+        const data = await fetchServerData(settings.gasWebAppUrl);
         if (!isMounted || !data || !data.success) return;
 
         const shouldUpdate = isInitial || (data.lastUpdated && data.lastUpdated !== lastServerTimestampRef.current);
@@ -183,13 +217,14 @@ export default function App() {
         console.warn('Central server sync poll warning:', err);
       } finally {
         isPulling = false;
+        if (isMounted) setIsSyncing(false);
       }
     };
 
-    // 1. Initial pull from server
+    // 1. Initial pull from server/cloud
     pullServerData(true);
 
-    // 2. Refresh on window focus (when user switches back to browser tab or device unlocks)
+    // 2. Refresh on window focus (เมื่อกลับมาที่แท็บหรือปลดล็อคหน้าจอ)
     const onWindowFocus = () => {
       pullServerData(false);
     };
@@ -203,13 +238,16 @@ export default function App() {
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
-    // 4. Periodic polling every 5 seconds for smooth cross-device auto-sync
+    // 4. Periodic polling ทุก 15 วินาทีเมื่อเปิดหน้าจออยู่ (ป้องกันการยิงเซิร์ฟเวอร์ถี่เกินไปและประหยัดโควต้า)
     const intervalId = setInterval(() => {
-      pullServerData(false);
-    }, 5000);
+      if (document.visibilityState === 'visible') {
+        pullServerData(false);
+      }
+    }, 15000);
 
     return () => {
       isMounted = false;
+      unsubscribeSync();
       window.removeEventListener('focus', onWindowFocus);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       clearInterval(intervalId);
@@ -230,20 +268,9 @@ export default function App() {
     setMenuBank(updated);
     showToast('เพิ่มเมนูสำเร็จ', `บันทึก "${item.menuName}" ในหมวด ${item.category} แล้ว`, 'success');
 
-    // Save to server for cross-device sync
-    await saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: true });
-
-    // Sync to GAS in background if configured
-    if (settings.gasWebAppUrl) {
-      try {
-        await callGasPost(settings.gasWebAppUrl, {
-          action: 'saveMenuItem',
-          data: newItem
-        });
-      } catch (err) {
-        console.error('GAS saveMenuItem error:', err);
-      }
-    }
+    // ซิงค์เฉพาะรายการใหม่แบบความเร็วสูงพิเศษ (Fast single item save)
+    saveSingleMenuItemDirect(newItem, settings.gasWebAppUrl);
+    saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: false });
   };
 
   const handleUpdateMenuItem = async (item: MenuItem) => {
@@ -251,18 +278,8 @@ export default function App() {
     setMenuBank(updated);
     showToast('อัปเดตเมนูแล้ว', `แก้ไขข้อมูล "${item.menuName}" เรียบร้อยแล้ว`, 'success');
 
-    await saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: true });
-
-    if (settings.gasWebAppUrl) {
-      try {
-        await callGasPost(settings.gasWebAppUrl, {
-          action: 'saveMenuItem',
-          data: item
-        });
-      } catch (err) {
-        console.error('GAS updateMenuItem error:', err);
-      }
-    }
+    saveSingleMenuItemDirect(item, settings.gasWebAppUrl);
+    saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: false });
   };
 
   const handleDeleteMenuItem = async (id: string) => {
@@ -271,18 +288,14 @@ export default function App() {
     setMenuBank(updated);
     showToast('ลบเมนูแล้ว', `ลบรายการ "${target?.menuName || ''}" ออกจากคลังแล้ว`, 'info');
 
-    await saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: true });
-
     if (settings.gasWebAppUrl) {
-      try {
-        await callGasPost(settings.gasWebAppUrl, {
-          action: 'deleteMenuItem',
-          id: id
-        });
-      } catch (err) {
-        console.error('GAS deleteMenuItem error:', err);
-      }
+      callGasPost(settings.gasWebAppUrl, {
+        action: 'deleteMenuItem',
+        id: id
+      }).catch((e) => console.warn('Delete menu warning:', e));
     }
+
+    saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: false });
   };
 
   const handleSeedPresets = async () => {
@@ -308,20 +321,9 @@ export default function App() {
 
     setDailyMenus(updated);
 
-    // Save to central server so all other devices receive this change
-    await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
-
-    // Sync to GAS in background if configured
-    if (settings.gasWebAppUrl) {
-      try {
-        await callGasPost(settings.gasWebAppUrl, {
-          action: 'saveDailyMenu',
-          data: entry
-        });
-      } catch (err) {
-        console.warn('GAS saveDailyMenu warning:', err);
-      }
-    }
+    // ซิงค์เฉพาะวันที่บันทึกไปยัง Google Sheets ใน ~300ms แทนการวนลูปทั้งเดือน
+    saveSingleDailyMenuDirect(entry, settings.gasWebAppUrl);
+    saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: false });
 
     return true;
   };
@@ -332,22 +334,30 @@ export default function App() {
     const updated = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
     setDailyMenus(updated);
 
+    // ซิงค์ทั้งเดือนด้วย High-speed Batch mode (ครั้งเดียวจบ ไม่วนลูป 20 ครั้ง)
     await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
-
-    if (settings.gasWebAppUrl) {
-      try {
-        for (const entry of entries) {
-          await callGasPost(settings.gasWebAppUrl, {
-            action: 'saveDailyMenu',
-            data: entry
-          });
-        }
-      } catch (err) {
-        console.warn('GAS batchSaveDailyMenus warning:', err);
-      }
-    }
-
     return true;
+  };
+
+  // ปุ่มกดซิงค์ด่วนด้วยมือ
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    showToast('กำลังซิงค์ข้อมูล...', 'กำลังดึงข้อมูลล่าสุดจากคลาวด์', 'info');
+    try {
+      const data = await fetchServerData(settings.gasWebAppUrl);
+      if (data && data.success) {
+        if (data.settings) setSettings((p) => ({ ...p, ...data.settings }));
+        if (data.menuBank) setMenuBank(data.menuBank);
+        if (data.dailyMenus) setDailyMenus(data.dailyMenus);
+        showToast('ซิงค์ข้อมูลสำเร็จ', 'ข้อมูลล่าสุดตรงกันทุกอุปกรณ์แล้ว', 'success');
+      } else {
+        showToast('ซิงค์เรียบร้อย', 'ข้อมูลในเครื่องเป็นเวอร์ชันล่าสุดแล้ว', 'success');
+      }
+    } catch (err: any) {
+      showToast('ซิงค์ไม่สำเร็จ', err.message || 'โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleDeleteDailyMenu = async (dateStr: string) => {
@@ -573,6 +583,8 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         isGasConnected={isGasConnected}
+        isSyncing={isSyncing}
+        onManualSync={handleManualSync}
       />
 
       {/* Main Content View Container */}

@@ -170,13 +170,78 @@ export function exportToCsv(filename: string, rows: string[][]) {
   document.body.removeChild(link);
 }
 
+const SYNC_CHANNEL_NAME = 'school_lunch_realtime_sync';
+let broadcastChannel: BroadcastChannel | null = null;
+try {
+  if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+    broadcastChannel = new BroadcastChannel(SYNC_CHANNEL_NAME);
+  }
+} catch (e) {
+  // Ignore in environments without BroadcastChannel
+}
+
+export function broadcastLocalChange(type: 'MENU_BANK' | 'DAILY_MENU' | 'SETTINGS' | 'ALL', payload: any) {
+  if (broadcastChannel) {
+    try {
+      broadcastChannel.postMessage({
+        type,
+        payload,
+        timestamp: Date.now()
+      });
+    } catch (e) {
+      console.warn('Broadcast error:', e);
+    }
+  }
+}
+
+export function subscribeToLocalSync(callback: (event: { type: string; payload: any; timestamp: number }) => void) {
+  if (!broadcastChannel) return () => {};
+  const handler = (e: MessageEvent) => {
+    if (e.data && e.data.type) {
+      callback(e.data);
+    }
+  };
+  broadcastChannel.addEventListener('message', handler);
+  return () => {
+    broadcastChannel?.removeEventListener('message', handler);
+  };
+}
+
+let gasDebounceTimer: any = null;
+let pendingGasPayload: any = null;
+
+export function queueDirectGasSync(gasUrl: string, payload: any, delayMs: number = 800) {
+  pendingGasPayload = payload;
+  if (gasDebounceTimer) {
+    clearTimeout(gasDebounceTimer);
+  }
+  gasDebounceTimer = setTimeout(async () => {
+    if (!pendingGasPayload) return;
+    const toSend = pendingGasPayload;
+    pendingGasPayload = null;
+    try {
+      await callGasPost(gasUrl, {
+        action: 'syncAll',
+        settings: toSend.settings,
+        menuBank: toSend.menuBank,
+        dailyMenu: toSend.dailyMenus
+      });
+    } catch (e: any) {
+      console.warn('Direct GAS sync notice:', e.message);
+    }
+  }, delayMs);
+}
+
 /**
  * ดึงข้อมูลที่ซิงค์ส่วนกลางจาก Server (ใช้ร่วมกันทุกเครื่อง ทุกเบราว์เซอร์ ทุกอีเมล)
  * พร้อมระบบ Fallback ดึงตรงจาก Google Sheets อัตโนมัติหากฝั่งเซิร์ฟเวอร์ยังไม่มีข้อมูล
  */
-export async function fetchServerData() {
+export async function fetchServerData(gasUrlOverride?: string) {
   try {
-    const res = await fetch('/api/data');
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch('/api/data', { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
       if (data && data.success && Array.isArray(data.dailyMenus) && data.dailyMenus.length > 0) {
@@ -184,12 +249,13 @@ export async function fetchServerData() {
       }
     }
   } catch (err) {
-    console.warn('fetchServerData server warning:', err);
+    // Server not available (e.g. running on Cloudflare Pages)
   }
 
   // Fallback: ดึงตรงจาก Google Apps Script ทันที เพื่อรับประกันว่าทุกเครื่องได้ข้อมูลชุดเดียวกัน 100%
   try {
-    const gasData = await callGasGet(DEFAULT_GAS_URL, { action: 'getAllData' });
+    const targetUrl = gasUrlOverride || DEFAULT_GAS_URL;
+    const gasData = await callGasGet(targetUrl, { action: 'getAllData' });
     if (gasData && gasData.status === 'success') {
       return {
         success: true,
@@ -208,7 +274,7 @@ export async function fetchServerData() {
 
 /**
  * บันทึกข้อมูลขึ้น Server เพื่อซิงค์ไปทุกเครื่อง ทุกอุปกรณ์ทันที
- * พร้อมส่งขึ้น Google Apps Script คู่ขนานเพื่อความปลอดภัยสูงสุด
+ * ความเร็วสูงด้วย BroadcastChannel (0ms ข้ามแท็บ) และ Debounced Cloud Sync
  */
 export async function saveServerData(payload: {
   settings?: SchoolSettings;
@@ -216,33 +282,61 @@ export async function saveServerData(payload: {
   dailyMenus?: DailyMenuEntry[];
   syncToGas?: boolean;
 }) {
+  // 1. กระจายข้อมูลข้ามแท็บในเครื่องเดียวกันทันทีใน 0 มิลลิวินาที
+  broadcastLocalChange('ALL', payload);
+
+  let hasServer = false;
   let serverResult: any = null;
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
     const res = await fetch('/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     if (res.ok) {
       serverResult = await res.json();
+      hasServer = true;
     }
   } catch (err) {
-    console.warn('saveServerData server error:', err);
+    // No backend server available (e.g. Cloudflare Pages)
   }
 
-  // ส่งขึ้น Google Apps Script โดยตรงจากเครื่องผู้ใช้ด้วย เพื่อให้ Google Sheets ได้ข้อมูลทันทีแน่นอน
-  if (payload.syncToGas !== false) {
+  // หากรันบน Cloudflare Pages ที่ไม่มี Node.js server ให้ส่งตรงไป Google Sheets แบบ Debounce
+  if (!hasServer && payload.syncToGas !== false) {
     const gasUrl = payload.settings?.gasWebAppUrl || DEFAULT_GAS_URL;
-    callGasPost(gasUrl, {
-      action: 'syncAll',
-      settings: payload.settings,
-      menuBank: payload.menuBank,
-      dailyMenu: payload.dailyMenus
-    }).catch((e) => console.warn('Direct client GAS push warning:', e));
+    queueDirectGasSync(gasUrl, payload, 600);
   }
 
   return serverResult || { success: true };
+}
+
+/**
+ * ซิงค์เมนูวันที่เดียวแบบความเร็วสูงพิเศษ (Fast single-day sync)
+ */
+export async function saveSingleDailyMenuDirect(entry: DailyMenuEntry, gasUrl?: string) {
+  broadcastLocalChange('DAILY_MENU', entry);
+  const targetUrl = gasUrl || DEFAULT_GAS_URL;
+  return callGasPost(targetUrl, {
+    action: 'saveDailyMenu',
+    data: entry
+  }).catch((err) => console.warn('Fast daily menu sync notice:', err));
+}
+
+/**
+ * ซิงค์เมนูในคลังแบบความเร็วสูงพิเศษ (Fast single-item sync)
+ */
+export async function saveSingleMenuItemDirect(item: MenuItem, gasUrl?: string) {
+  broadcastLocalChange('MENU_BANK', item);
+  const targetUrl = gasUrl || DEFAULT_GAS_URL;
+  return callGasPost(targetUrl, {
+    action: 'saveMenuItem',
+    data: item
+  }).catch((err) => console.warn('Fast menu item sync notice:', err));
 }
 
 /**

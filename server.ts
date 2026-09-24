@@ -212,10 +212,10 @@ async function startServer() {
   // Instantly trigger initial sync from Google Sheets in background
   syncFromGas().catch((err) => console.warn('Initial sync error:', err));
 
-  // Run periodic background sync from Google Sheets every 8 seconds
+  // Run periodic background sync from Google Sheets every 60 seconds (prevents Google quota exhaustion)
   setInterval(() => {
     syncFromGas().catch(() => {});
-  }, 8000);
+  }, 60000);
 
   // -----------------------------------------------------------------
   // 1. GET /api/data - Fetch all synchronized school data
@@ -260,15 +260,20 @@ async function startServer() {
 
       writeStore(current);
 
-      // Background sync to GAS if configured and requested
+      // Debounced background sync to GAS (merges rapid edits into 1 call)
       const gasUrl = current.settings.gasWebAppUrl || DEFAULT_SETTINGS.gasWebAppUrl;
       if (gasUrl && syncToGas !== false) {
-        callGas(gasUrl, {
-          action: 'syncAll',
-          settings: current.settings,
-          menuBank: current.menuBank,
-          dailyMenu: current.dailyMenus
-        }).catch((e) => console.warn('Background GAS sync warning:', e.message));
+        if ((global as any).__gasSyncTimer) {
+          clearTimeout((global as any).__gasSyncTimer);
+        }
+        (global as any).__gasSyncTimer = setTimeout(() => {
+          callGas(gasUrl, {
+            action: 'syncAll',
+            settings: current.settings,
+            menuBank: current.menuBank,
+            dailyMenu: current.dailyMenus
+          }).catch((e) => console.warn('Background GAS sync warning:', e.message));
+        }, 1200);
       }
 
       res.json({

@@ -642,12 +642,56 @@ function deleteDailyMenuData(ss, dateStr) {
 }
 
 function handleSyncAll(ss, payload) {
-  if (payload.settings) saveSettingsData(ss, payload.settings);
-  if (payload.menuBank && Array.isArray(payload.menuBank)) {
-    payload.menuBank.forEach(item => saveMenuItemData(ss, item));
+  const now = new Date();
+
+  // 1. Batch Sync Settings
+  if (payload.settings) {
+    saveSettingsData(ss, payload.settings);
   }
-  if (payload.dailyMenus && Array.isArray(payload.dailyMenus)) {
-    payload.dailyMenus.forEach(item => saveDailyMenuData(ss, item));
+
+  // 2. High-speed Batch Sync MenuBank (1 single write operation)
+  if (payload.menuBank && Array.isArray(payload.menuBank) && payload.menuBank.length > 0) {
+    const sheetMB = ss.getSheetByName('MenuBank');
+    if (sheetMB) {
+      const rows = payload.menuBank.map((item, idx) => [
+        item.id || ('MB' + (idx + 1)),
+        item.category || 'อาหารไม่เผ็ด',
+        item.menuName || '',
+        item.createdAt || Utilities.formatDate(now, Session.getScriptTimeZone(), 'yyyy-MM-dd')
+      ]);
+      const lastRow = sheetMB.getLastRow();
+      if (lastRow > 1) {
+        sheetMB.getRange(2, 1, lastRow - 1, 4).clearContent();
+      }
+      sheetMB.getRange(2, 1, rows.length, 4).setValues(rows);
+    }
   }
-  return { status: 'success', message: 'ซิงค์ข้อมูลทั้งหมดลง Google Sheets เรียบร้อยแล้ว' };
+
+  // 3. High-speed Batch Sync DailyMenu (1 single write operation instead of loop)
+  if (payload.dailyMenus && Array.isArray(payload.dailyMenus) && payload.dailyMenus.length > 0) {
+    const sheetDM = ss.getSheetByName('DailyMenu');
+    if (sheetDM) {
+      const rows = payload.dailyMenus.map(item => [
+        item.date,
+        item.rice || '',
+        item.singleDish || '',
+        item.spicy || '',
+        item.nonSpicy || '',
+        item.dessert || '',
+        JSON.stringify(item.photos || []),
+        item.note || '',
+        item.department || '',
+        item.updatedBy || 'ผู้จัดการระบบ',
+        now
+      ]);
+      const lastRow = sheetDM.getLastRow();
+      if (lastRow > 1) {
+        sheetDM.getRange(2, 1, lastRow - 1, 11).clearContent();
+      }
+      sheetDM.getRange(2, 1, rows.length, 11).setValues(rows);
+    }
+  }
+
+  SpreadsheetApp.flush();
+  return { status: 'success', message: 'ซิงค์ข้อมูลความเร็วสูงลง Google Sheets เรียบร้อยแล้ว (Batch mode)' };
 }
