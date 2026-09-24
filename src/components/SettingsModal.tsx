@@ -1,22 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { SchoolSettings } from '../types';
 import { fileToBase64, FALLBACK_IMAGE_URL } from '../services/api';
-import { FULL_CODE_GS } from '../services/gasCode';
 import { 
   School, 
   Upload, 
   Save, 
   Trash2, 
   Image as ImageIcon,
-  Cloud,
   CheckCircle,
-  AlertCircle,
   RefreshCw,
-  Copy,
-  Check,
-  ChevronDown,
-  ChevronUp,
-  HardDrive
+  User,
+  ShieldCheck
 } from 'lucide-react';
 
 interface SettingsModalProps {
@@ -32,22 +26,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings: initialSettings,
   onSaveSettings,
   onUploadLogo,
-  onTestGasConnection,
-  onSyncGas,
   showToast
 }) => {
   // Form states
   const [schoolName, setSchoolName] = useState<string>(initialSettings.schoolName || '');
   const [department, setDepartment] = useState<string>(initialSettings.department || '');
+  const [managerName, setManagerName] = useState<string>(initialSettings.managerName || '');
+  const [directorName, setDirectorName] = useState<string>(initialSettings.directorName || '');
   const [logoUrl, setLogoUrl] = useState<string>(initialSettings.logoUrl || '');
-  const [gasWebAppUrl, setGasWebAppUrl] = useState<string>(initialSettings.gasWebAppUrl || '');
 
   // Interaction states
   const [isUploadingLogo, setIsUploadingLogo] = useState<boolean>(false);
-  const [isTestingGas, setIsTestingGas] = useState<boolean>(false);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [showScriptCode, setShowScriptCode] = useState<boolean>(false);
-  const [copiedScript, setCopiedScript] = useState<boolean>(false);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const fileLogoRef = useRef<HTMLInputElement>(null);
 
@@ -59,12 +48,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       ...initialSettings,
       schoolName: schoolName.trim(),
       department: department.trim(),
+      managerName: managerName.trim(),
+      directorName: directorName.trim(),
       logoUrl: logoUrl.trim(),
-      gasWebAppUrl: gasWebAppUrl.trim()
+      gasWebAppUrl: initialSettings.gasWebAppUrl || ''
     };
 
     await onSaveSettings(updated);
-    showToast('บันทึกการตั้งค่าแล้ว', 'อัปเดตข้อมูลและบันทึกซิงค์ไปยังทุกเครื่องเรียบร้อยแล้ว', 'success');
+    showToast('บันทึกการตั้งค่าแล้ว', 'อัปเดตข้อมูลโรงเรียนเรียบร้อยแล้ว', 'success');
   };
 
   const processLogoFile = async (file: File) => {
@@ -89,7 +80,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         if (res && res.logoUrl) {
           setLogoUrl(res.logoUrl);
           if (res.isDrive) {
-            showToast('บันทึกลง Google Drive สำเร็จ', 'จัดเก็บไฟล์ตราโรงเรียนใน Google Drive และอัปเดตลิงก์ตรงแล้ว', 'success');
+            showToast('บันทึกลง Google Drive สำเร็จ', 'จัดเก็บไฟล์ตราโรงเรียนใน Google Drive เรียบร้อยแล้ว', 'success');
           } else {
             showToast('อัปโหลดสำเร็จ', res.message || 'บันทึกโลโก้ในระบบเรียบร้อยแล้ว', 'info');
           }
@@ -135,60 +126,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     showToast('รีเซ็ตโลโก้', 'ใช้ตราสัญลักษณ์เริ่มต้นของระบบแล้ว', 'info');
   };
 
-  const handleTestConnection = async () => {
-    if (!gasWebAppUrl.trim()) {
-      showToast('กรุณาระบุ URL', 'โปรดระบุ Web App URL ของ Google Apps Script ก่อนทดสอบ', 'warning');
-      return;
-    }
-
-    setIsTestingGas(true);
-    try {
-      if (onTestGasConnection) {
-        const res = await onTestGasConnection(gasWebAppUrl.trim());
-        if (res.success) {
-          showToast('เชื่อมต่อสำเร็จ', res.message || 'สามารถสื่อสารกับ Google Apps Script ได้เรียบร้อย', 'success');
-        } else {
-          showToast('เชื่อมต่อไม่สำเร็จ', res.message || 'กรุณาตรวจสอบ URL หรือการตั้งค่าสิทธิ์ Anyone', 'error');
-        }
-      }
-    } catch (err: any) {
-      showToast('ข้อผิดพลาด', err.message || 'ไม่สามารถเชื่อมต่อได้', 'error');
-    } finally {
-      setIsTestingGas(false);
-    }
-  };
-
-  const handleManualSync = async () => {
-    if (!gasWebAppUrl.trim()) {
-      showToast('ยังไม่มี URL', 'กรุณาระบุ Web App URL ก่อนทำการซิงค์', 'warning');
-      return;
-    }
-
-    setIsSyncing(true);
-    try {
-      if (onSyncGas) {
-        const success = await onSyncGas(gasWebAppUrl.trim());
-        if (success) {
-          showToast('ซิงค์ข้อมูลสำเร็จ', 'ดึงข้อมูลล่าสุดจาก Google Sheets และ Google Drive เรียบร้อย', 'success');
-        } else {
-          showToast('ซิงค์ไม่สำเร็จ', 'ไม่สามารถดึงข้อมูลจาก Google Sheets ได้', 'error');
-        }
-      }
-    } catch (err: any) {
-      showToast('เกิดข้อผิดพลาดในการซิงค์', err.message || 'เชื่อมต่อขัดข้อง', 'error');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const copyScriptToClipboard = () => {
-    navigator.clipboard.writeText(FULL_CODE_GS).then(() => {
-      setCopiedScript(true);
-      showToast('คัดลอกสำเร็จ', 'คัดลอกโค้ด Google Apps Script (Code.gs) ลงคลิปบอร์ดแล้ว', 'success');
-      setTimeout(() => setCopiedScript(false), 2500);
-    });
-  };
-
   return (
     <div className="max-w-4xl mx-auto space-y-5">
       {/* Settings Form */}
@@ -204,15 +141,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               ข้อมูลสถานศึกษา
             </h3>
             <p className="text-xs text-slate-500">
-              กำหนดชื่อโรงเรียน หน่วยงานต้นสังกัด ตราสัญลักษณ์ และการซิงค์ข้อมูลคลาวด์
+              กำหนดชื่อโรงเรียน หน่วยงานต้นสังกัด ผู้บริหาร และตราสัญลักษณ์โรงเรียน
             </p>
           </div>
         </div>
 
-        {/* 1. School Information */}
+        {/* 1. School Information Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <School className="w-3.5 h-3.5 text-amber-600" />
               ชื่อโรงเรียน / สถานศึกษา <span className="text-rose-500">*</span>
             </label>
             <input
@@ -227,7 +165,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
+            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
               สังกัด / หน่วยงานต้นสังกัด <span className="text-rose-500">*</span>
             </label>
             <input
@@ -238,6 +177,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               placeholder="เช่น สังกัดสำนักงานเขตพื้นที่การศึกษาประถมศึกษา..."
               className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
               required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-amber-600" />
+              ผู้จัดทำ / หัวหน้างานโภชนาการ
+            </label>
+            <input
+              id="input-manager-name"
+              type="text"
+              value={managerName}
+              onChange={(e) => setManagerName(e.target.value)}
+              placeholder="เช่น นางกาญจนา มงคลสุข (หัวหน้างานโภชนาการโรงเรียน)"
+              className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-amber-600" />
+              ผู้อำนวยการสถานศึกษา / ผู้บริหาร
+            </label>
+            <input
+              id="input-director-name"
+              type="text"
+              value={directorName}
+              onChange={(e) => setDirectorName(e.target.value)}
+              placeholder="เช่น นายประเสริฐ วัฒนาภิรมย์ (ผู้อำนวยการสถานศึกษา)"
+              className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
             />
           </div>
         </div>
@@ -258,7 +227,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 )}
               </div>
               <p className="text-[11px] text-slate-500">
-                อัปโหลดรูปภาพตราโรงเรียน เพื่อใช้แสดงผลบนแถบหัวเว็บและส่วนหัวเอกสารพิมพ์รายงาน A4 (จัดเก็บใน Google Drive อัตโนมัติ)
+                อัปโหลดรูปภาพตราโรงเรียน เพื่อใช้แสดงผลบนแถบหัวเว็บและส่วนหัวเอกสารพิมพ์รายงาน A4
               </p>
             </div>
             {logoUrl && (
@@ -336,9 +305,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     รองรับไฟล์ภาพ PNG, JPG, WebP, SVG (ขนาดไม่เกิน 5 MB)
                   </p>
-                  <p className="text-[10px] text-emerald-600 font-medium mt-1">
-                    ระบบจะบันทึกรูปภาพตราโรงเรียนลง Google Drive โฟลเดอร์ SchoolLogo โดยตรง
-                  </p>
                 </div>
 
                 <button
@@ -367,128 +333,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
-        {/* 3. Google Drive & Google Sheets Cloud Sync Section */}
-        <div className="pt-4 border-t border-slate-100 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <Cloud className="w-4 h-4 text-sky-600" />
-                <label className="block text-xs font-bold text-slate-800">
-                  การเชื่อมต่อ Google Drive & Google Sheets (ซิงค์ทุกเครื่องและบันทึกไฟล์ภาพ)
-                </label>
-              </div>
-              <p className="text-[11px] text-slate-500">
-                เมื่อเชื่อมต่อแล้ว ข้อมูลเมนูและการตั้งค่าจะซิงค์หากันทุกอุปกรณ์ ทุกเบราว์เซอร์ และรูปภาพทั้งหมดจะถูกบันทึกลง Google Drive
-              </p>
-            </div>
-
-            {/* Status indicator */}
-            <div>
-              {gasWebAppUrl ? (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>เปิดใช้งานคลาวด์แล้ว</span>
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                  <AlertCircle className="w-3 h-3 text-amber-600" />
-                  <span>โหมดเซิร์ฟเวอร์ส่วนกลาง</span>
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Web App URL Input with Action Buttons */}
-          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 space-y-2.5">
-            <label className="block text-xs font-semibold text-slate-700">
-              Google Apps Script Web App URL
-            </label>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                id="input-gas-url"
-                type="url"
-                value={gasWebAppUrl}
-                onChange={(e) => setGasWebAppUrl(e.target.value)}
-                placeholder="https://script.google.com/macros/s/.../exec"
-                className="flex-1 px-3.5 py-2 text-xs bg-white border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 font-mono transition-all"
-              />
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleTestConnection}
-                  disabled={isTestingGas || !gasWebAppUrl.trim()}
-                  className="px-3 py-2 bg-white hover:bg-slate-100 disabled:opacity-50 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isTestingGas ? 'animate-spin' : ''}`} />
-                  <span>{isTestingGas ? 'กำลังทดสอบ...' : 'ทดสอบเชื่อมต่อ'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleManualSync}
-                  disabled={isSyncing || !gasWebAppUrl.trim()}
-                  className="px-3.5 py-2 bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-                >
-                  <Cloud className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>{isSyncing ? 'กำลังซิงค์...' : 'ซิงค์ทันที'}</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Quick helper guide */}
-            <div className="flex items-center justify-between pt-1">
-              <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                <HardDrive className="w-3.5 h-3.5 text-slate-400" />
-                โฟลเดอร์ Google Drive: <code className="text-[10px] bg-slate-200/70 px-1 py-0.5 rounded text-slate-700">13hIUaTSAcZgA_smhKD6PSjuXwkr4ZsiI</code>
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowScriptCode(!showScriptCode)}
-                className="text-[11px] font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1 cursor-pointer transition-colors"
-              >
-                <span>{showScriptCode ? 'ซ่อนคู่มือโค้ดสคริปต์' : 'ดูวิธีติดตั้งสคริปต์ (Code.gs)'}</span>
-                {showScriptCode ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-
-            {/* Collapsible Script Code & Setup Instructions */}
-            {showScriptCode && (
-              <div className="mt-3 pt-3 border-t border-slate-200 space-y-3">
-                <div className="bg-amber-50/80 border border-amber-200/70 rounded-xl p-3 text-[11px] text-amber-900 space-y-1.5">
-                  <div className="font-bold flex items-center gap-1">
-                    <span>ขั้นตอนติดตั้งง่ายๆ 3 ขั้นตอน:</span>
-                  </div>
-                  <ol className="list-decimal list-inside space-y-0.5 text-amber-800">
-                    <li>เปิด Google Sheet ของท่าน &rarr; เมนู <b>ส่วนขยาย (Extensions)</b> &rarr; <b>Apps Script</b></li>
-                    <li>วางโค้ดด้านล่างลงในไฟล์ <b>Code.gs</b> แล้วกดบันทึก</li>
-                    <li>กดปุ่ม <b>ทำให้ใช้งานได้ (Deploy)</b> &rarr; <b>การทำให้ใช้งานได้รายการใหม่ (New deployment)</b> &rarr; ประเภท <b>Web app</b> &rarr; เลือก Who has access เป็น <b>Anyone (ทุกคน)</b> แล้วคัดลอก Web App URL มาใส่ในช่องด้านบน</li>
-                  </ol>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-slate-700">โค้ด Apps Script Backend (Code.gs):</span>
-                  <button
-                    type="button"
-                    onClick={copyScriptToClipboard}
-                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-                  >
-                    {copiedScript ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedScript ? 'คัดลอกโค้ดแล้ว!' : 'คัดลอกโค้ดทั้งหมด'}</span>
-                  </button>
-                </div>
-
-                <pre className="max-h-48 overflow-y-auto p-3 bg-slate-900 text-slate-200 rounded-xl text-[10px] font-mono leading-relaxed border border-slate-800">
-                  {FULL_CODE_GS.slice(0, 1500)}
-                  {'\n... (กดปุ่มคัดลอกโค้ดทั้งหมดเพื่อนำไปใช้งาน)'}
-                </pre>
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Submit Button */}
         <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
           <p className="text-[11px] text-slate-500">
-            * ข้อมูลจะถูกบันทึกและซิงค์เชื่อมโยงไปยังทุกอุปกรณ์ ทุกเบราว์เซอร์ และทุกบัญชีทันที
+            * ข้อมูลจะถูกบันทึกและซิงค์เชื่อมโยงไปยังทุกอุปกรณ์ ทุกเบราว์เซอร์ และทุกบัญชีโดยอัตโนมัติ
           </p>
           <button
             id="btn-save-school-settings"

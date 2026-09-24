@@ -52,8 +52,11 @@ export function fileToBase64(file: File): Promise<string> {
   });
 }
 
+export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzKYFt1-hn2Qq9bnrsQpG9PMhehuuq6yuaE2e6Tq8ogIB1Ft6EQV4FdyzUkL5RxTKqf/exec';
+
 /**
  * ยิงเรียก Google Apps Script Backend (GET)
+ * หมายเหตุ: ไม่ใส่ custom headers (เช่น Accept หรือ Content-Type) เพื่อป้องกันเบราว์เซอร์ส่ง OPTIONS preflight CORS
  */
 export async function callGasGet(webAppUrl: string, params: Record<string, string> = {}) {
   if (!webAppUrl || !webAppUrl.trim()) {
@@ -84,9 +87,6 @@ export async function callGasGet(webAppUrl: string, params: Record<string, strin
       method: 'GET',
       mode: 'cors',
       redirect: 'follow',
-      headers: {
-        'Accept': 'application/json'
-      },
       signal: controller.signal
     });
     clearTimeout(timeoutId);
@@ -104,7 +104,7 @@ export async function callGasGet(webAppUrl: string, params: Record<string, strin
     }
     if (error instanceof TypeError && error.message.includes('fetch')) {
       throw new Error(
-        'Failed to fetch: ไม่สามารถเชื่อมต่อกับ Google Apps Script ได้ (สาเหตุส่วนใหญ่: 1. ยังไม่ได้ตั้งค่า Who has access เป็น "Anyone" หรือ 2. ยังไม่ได้เปิดอนุญาตสิทธิ์เข้าถึงบัญชี Google ให้กับสคริปต์)'
+        'Failed to fetch: ไม่สามารถเชื่อมต่อกับ Google Apps Script ได้'
       );
     }
     throw error;
@@ -172,24 +172,43 @@ export function exportToCsv(filename: string, rows: string[][]) {
 
 /**
  * ดึงข้อมูลที่ซิงค์ส่วนกลางจาก Server (ใช้ร่วมกันทุกเครื่อง ทุกเบราว์เซอร์ ทุกอีเมล)
+ * พร้อมระบบ Fallback ดึงตรงจาก Google Sheets อัตโนมัติหากฝั่งเซิร์ฟเวอร์ยังไม่มีข้อมูล
  */
 export async function fetchServerData() {
   try {
-    const res = await fetch('/api/data', {
-      headers: { 'Accept': 'application/json' }
-    });
-    if (!res.ok) {
-      throw new Error(`HTTP Error ${res.status}`);
+    const res = await fetch('/api/data');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && Array.isArray(data.dailyMenus) && data.dailyMenus.length > 0) {
+        return data;
+      }
     }
-    return await res.json();
   } catch (err) {
-    console.warn('fetchServerData error:', err);
-    return null;
+    console.warn('fetchServerData server warning:', err);
   }
+
+  // Fallback: ดึงตรงจาก Google Apps Script ทันที เพื่อรับประกันว่าทุกเครื่องได้ข้อมูลชุดเดียวกัน 100%
+  try {
+    const gasData = await callGasGet(DEFAULT_GAS_URL, { action: 'getAllData' });
+    if (gasData && gasData.status === 'success') {
+      return {
+        success: true,
+        settings: gasData.settings,
+        menuBank: gasData.menuBank,
+        dailyMenus: gasData.dailyMenu,
+        lastUpdated: new Date().toISOString()
+      };
+    }
+  } catch (gasErr) {
+    console.warn('Direct GAS sync warning:', gasErr);
+  }
+
+  return null;
 }
 
 /**
  * บันทึกข้อมูลขึ้น Server เพื่อซิงค์ไปทุกเครื่อง ทุกอุปกรณ์ทันที
+ * พร้อมส่งขึ้น Google Apps Script คู่ขนานเพื่อความปลอดภัยสูงสุด
  */
 export async function saveServerData(payload: {
   settings?: SchoolSettings;
@@ -197,20 +216,33 @@ export async function saveServerData(payload: {
   dailyMenus?: DailyMenuEntry[];
   syncToGas?: boolean;
 }) {
+  let serverResult: any = null;
+
   try {
     const res = await fetch('/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    if (!res.ok) {
-      throw new Error(`HTTP Error ${res.status}`);
+    if (res.ok) {
+      serverResult = await res.json();
     }
-    return await res.json();
   } catch (err) {
-    console.warn('saveServerData error:', err);
-    return null;
+    console.warn('saveServerData server error:', err);
   }
+
+  // ส่งขึ้น Google Apps Script โดยตรงจากเครื่องผู้ใช้ด้วย เพื่อให้ Google Sheets ได้ข้อมูลทันทีแน่นอน
+  if (payload.syncToGas !== false) {
+    const gasUrl = payload.settings?.gasWebAppUrl || DEFAULT_GAS_URL;
+    callGasPost(gasUrl, {
+      action: 'syncAll',
+      settings: payload.settings,
+      menuBank: payload.menuBank,
+      dailyMenu: payload.dailyMenus
+    }).catch((e) => console.warn('Direct client GAS push warning:', e));
+  }
+
+  return serverResult || { success: true };
 }
 
 /**

@@ -151,8 +151,11 @@ export default function App() {
   // -------------------------------------------------------------
   useEffect(() => {
     let isMounted = true;
+    let isPulling = false;
 
     const pullServerData = async (isInitial = false) => {
+      if (isPulling) return;
+      isPulling = true;
       try {
         const data = await fetchServerData();
         if (!isMounted || !data || !data.success) return;
@@ -172,16 +175,14 @@ export default function App() {
             setMenuBank(data.menuBank);
           }
 
-          if (Array.isArray(data.dailyMenus)) {
+          if (Array.isArray(data.dailyMenus) && data.dailyMenus.length > 0) {
             setDailyMenus(data.dailyMenus);
-          }
-
-          if (!isInitial) {
-            console.log('Synchronized latest data from central server across devices');
           }
         }
       } catch (err) {
         console.warn('Central server sync poll warning:', err);
+      } finally {
+        isPulling = false;
       }
     };
 
@@ -194,14 +195,23 @@ export default function App() {
     };
     window.addEventListener('focus', onWindowFocus);
 
-    // 3. Periodic polling every 12 seconds
+    // 3. Refresh on tab visibility change
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        pullServerData(false);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    // 4. Periodic polling every 5 seconds for smooth cross-device auto-sync
     const intervalId = setInterval(() => {
       pullServerData(false);
-    }, 12000);
+    }, 5000);
 
     return () => {
       isMounted = false;
       window.removeEventListener('focus', onWindowFocus);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       clearInterval(intervalId);
     };
   }, []);
@@ -221,7 +231,7 @@ export default function App() {
     showToast('เพิ่มเมนูสำเร็จ', `บันทึก "${item.menuName}" ในหมวด ${item.category} แล้ว`, 'success');
 
     // Save to server for cross-device sync
-    await saveServerData({ menuBank: updated, syncToGas: true });
+    await saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: true });
 
     // Sync to GAS in background if configured
     if (settings.gasWebAppUrl) {
@@ -241,7 +251,7 @@ export default function App() {
     setMenuBank(updated);
     showToast('อัปเดตเมนูแล้ว', `แก้ไขข้อมูล "${item.menuName}" เรียบร้อยแล้ว`, 'success');
 
-    await saveServerData({ menuBank: updated, syncToGas: true });
+    await saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: true });
 
     if (settings.gasWebAppUrl) {
       try {
@@ -261,7 +271,7 @@ export default function App() {
     setMenuBank(updated);
     showToast('ลบเมนูแล้ว', `ลบรายการ "${target?.menuName || ''}" ออกจากคลังแล้ว`, 'info');
 
-    await saveServerData({ menuBank: updated, syncToGas: true });
+    await saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: true });
 
     if (settings.gasWebAppUrl) {
       try {
@@ -299,7 +309,7 @@ export default function App() {
     setDailyMenus(updated);
 
     // Save to central server so all other devices receive this change
-    await saveServerData({ dailyMenus: updated, syncToGas: true });
+    await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
 
     // Sync to GAS in background if configured
     if (settings.gasWebAppUrl) {
@@ -322,7 +332,7 @@ export default function App() {
     const updated = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
     setDailyMenus(updated);
 
-    await saveServerData({ dailyMenus: updated, syncToGas: true });
+    await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
 
     if (settings.gasWebAppUrl) {
       try {
@@ -345,7 +355,7 @@ export default function App() {
     setDailyMenus(updated);
     showToast('ลบข้อมูลเรียบร้อย', `ลบเมนูวันที่ ${dateStr} แล้ว`, 'info');
 
-    await saveServerData({ dailyMenus: updated, syncToGas: true });
+    await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
 
     if (settings.gasWebAppUrl) {
       try {

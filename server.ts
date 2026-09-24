@@ -139,6 +139,63 @@ async function callGas(url: string, payload: any): Promise<any> {
   }
 }
 
+// Background synchronization from Google Sheets
+let isSyncingGas = false;
+async function syncFromGas(gasUrl?: string): Promise<boolean> {
+  if (isSyncingGas) return false;
+  isSyncingGas = true;
+
+  try {
+    const current = readStore();
+    const targetUrl = gasUrl || current.settings?.gasWebAppUrl || DEFAULT_SETTINGS.gasWebAppUrl;
+    if (!targetUrl) return false;
+
+    let cleanUrl = targetUrl.trim();
+    if (cleanUrl.includes('/macros/s/') && cleanUrl.endsWith('/dev')) {
+      cleanUrl = cleanUrl.replace(/\/dev$/, '/exec');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    const res = await fetch(`${cleanUrl}${cleanUrl.includes('?') ? '&' : '?'}action=getAllData`, {
+      method: 'GET',
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) return false;
+
+    const data = await res.json();
+    if (data && data.status === 'success') {
+      let changed = false;
+      if (data.settings && Object.keys(data.settings).length > 0) {
+        current.settings = { ...current.settings, ...data.settings, gasWebAppUrl: targetUrl };
+        changed = true;
+      }
+      if (Array.isArray(data.menuBank) && data.menuBank.length > 0) {
+        current.menuBank = data.menuBank;
+        changed = true;
+      }
+      if (Array.isArray(data.dailyMenu) && data.dailyMenu.length > 0) {
+        current.dailyMenus = data.dailyMenu;
+        changed = true;
+      }
+      if (changed) {
+        current.lastUpdated = new Date().toISOString();
+        writeStore(current);
+        console.log(`[AutoSync] Synced ${current.dailyMenus.length} daily menus and ${current.menuBank.length} menu items from Google Sheets`);
+      }
+      return true;
+    }
+  } catch (err: any) {
+    console.warn('[AutoSync] Background GAS sync warning:', err.message);
+  } finally {
+    isSyncingGas = false;
+  }
+  return false;
+}
+
 async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
@@ -150,18 +207,31 @@ async function startServer() {
   // Ensure store exists on startup
   initStore();
 
+  // Instantly trigger initial sync from Google Sheets in background
+  syncFromGas().catch((err) => console.warn('Initial sync error:', err));
+
+  // Run periodic background sync from Google Sheets every 8 seconds
+  setInterval(() => {
+    syncFromGas().catch(() => {});
+  }, 8000);
+
   // -----------------------------------------------------------------
   // 1. GET /api/data - Fetch all synchronized school data
   // -----------------------------------------------------------------
-  app.get('/api/data', (_req, res) => {
+  app.get('/api/data', async (_req, res) => {
     try {
       const data = readStore();
+      // If store is empty or has fewer than expected items, trigger immediate sync
+      if (!data.dailyMenus || data.dailyMenus.length === 0) {
+        await syncFromGas();
+      }
+      const latest = readStore();
       res.json({
         success: true,
-        settings: data.settings,
-        menuBank: data.menuBank,
-        dailyMenus: data.dailyMenus,
-        lastUpdated: data.lastUpdated
+        settings: latest.settings,
+        menuBank: latest.menuBank,
+        dailyMenus: latest.dailyMenus,
+        lastUpdated: latest.lastUpdated
       });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
@@ -189,7 +259,7 @@ async function startServer() {
       writeStore(current);
 
       // Background sync to GAS if configured and requested
-      const gasUrl = current.settings.gasWebAppUrl;
+      const gasUrl = current.settings.gasWebAppUrl || DEFAULT_SETTINGS.gasWebAppUrl;
       if (gasUrl && syncToGas !== false) {
         callGas(gasUrl, {
           action: 'syncAll',

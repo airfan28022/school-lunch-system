@@ -10,6 +10,7 @@ export type MenuCategory =
   | 'อาหารเผ็ด'
   | 'ผลไม้'
   | 'ของหวาน'
+  | 'ขนมหวาน'
   | 'ผลไม้-ของหวาน';
 
 export const MENU_CATEGORIES: { id: MenuCategory; label: string; icon: string; badgeColor: string; description: string }[] = [
