@@ -668,10 +668,11 @@ function handleSyncAll(ss, payload) {
   }
 
   // 3. High-speed Batch Sync DailyMenu (1 single write operation instead of loop)
-  if (payload.dailyMenus && Array.isArray(payload.dailyMenus) && payload.dailyMenus.length > 0) {
+  const dailyList = payload.dailyMenus || payload.dailyMenu;
+  if (dailyList && Array.isArray(dailyList) && dailyList.length > 0) {
     const sheetDM = ss.getSheetByName('DailyMenu');
     if (sheetDM) {
-      const rows = payload.dailyMenus.map(item => [
+      const rows = dailyList.map(item => [
         item.date,
         item.rice || '',
         item.singleDish || '',

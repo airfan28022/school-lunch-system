@@ -77,24 +77,13 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   // กำหนดเดือนและปีเริ่มต้น:
   // ลำดับ 1: ใช้จาก initialYear / initialMonth ถ้ามีส่งเข้ามา (เช่น เพิ่งกดสุ่มในหน้าจัดการ)
   // ลำดับ 2: ถ้ามีเมนูในระบบ ให้เลือกเดือนล่าสุดที่มีข้อมูล
-  // ลำดับ 3: วันที่ปัจจุบันของเครื่อง
   const [selectedYear, setSelectedYear] = useState<number>(() => {
     if (initialYear) return initialYear;
-    if (dailyMenus.length > 0) {
-      const sorted = [...dailyMenus].sort((a, b) => b.date.localeCompare(a.date));
-      const parts = sorted[0].date.split('-').map(Number);
-      if (parts[0]) return parts[0];
-    }
     return new Date().getFullYear();
   });
 
   const [selectedMonth, setSelectedMonth] = useState<number>(() => {
     if (initialMonth) return initialMonth;
-    if (dailyMenus.length > 0) {
-      const sorted = [...dailyMenus].sort((a, b) => b.date.localeCompare(a.date));
-      const parts = sorted[0].date.split('-').map(Number);
-      if (parts[1]) return parts[1];
-    }
     return new Date().getMonth() + 1;
   });
 
@@ -103,18 +92,6 @@ export const PrintReport: React.FC<PrintReportProps> = ({
     if (initialMonth) setSelectedMonth(initialMonth);
     if (initialYear) setSelectedYear(initialYear);
   }, [initialMonth, initialYear]);
-
-  // สลับไปยังเดือนที่มีข้อมูลอัตโนมัติ หากเดือนที่เลือกอยู่ปัจจุบันไม่มีข้อมูลเลย แต่ในระบบมีเดือนอื่นบันทึกไว้
-  React.useEffect(() => {
-    const currentKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
-    const hasDataInCurrent = dailyMenus.some((m) => m.date.startsWith(currentKey));
-    if (!hasDataInCurrent && availableMonths.length > 0) {
-      // สลับไปเดือนที่มีข้อมูลมากที่สุดหรือล่าสุดทันที เพื่อไม่ให้หน้าจอว่างเปล่า
-      const best = availableMonths[0];
-      setSelectedYear(best.year);
-      setSelectedMonth(best.month);
-    }
-  }, [dailyMenus, availableMonths]);
   
   // Filter by search
   const [searchFilter, setSearchFilter] = useState<string>('');
@@ -334,53 +311,6 @@ export const PrintReport: React.FC<PrintReportProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* ------------------------------------------------------------- */}
-      {/* 0. แถบเลือกเดือนด่วน (Quick Month Selector Bar)                */}
-      {/* แสดงเฉพาะเดือนที่มีการบันทึกหรือสุ่มเมนูไว้ในระบบแล้ว               */}
-      {/* ------------------------------------------------------------- */}
-      {availableMonths.length > 0 && (
-        <div className="no-print bg-gradient-to-r from-emerald-50 via-teal-50 to-slate-50 p-3 sm:p-3.5 rounded-2xl border border-emerald-200/90 shadow-2xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                เดือนที่มีรายการอาหารในระบบ:
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {availableMonths.map((m) => {
-                const isSelected = m.year === selectedYear && m.month === selectedMonth;
-                return (
-                  <button
-                    key={m.key}
-                    type="button"
-                    onClick={() => {
-                      setSelectedYear(m.year);
-                      setSelectedMonth(m.month);
-                    }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
-                      isSelected
-                        ? 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-600/30'
-                        : 'bg-white hover:bg-emerald-100/70 text-slate-700 border border-slate-200 hover:border-emerald-300'
-                    }`}
-                  >
-                    <span>{m.label}</span>
-                    <span
-                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
-                        isSelected ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {m.count} วัน
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ------------------------------------------------------------- */}
       {/* Control Bar: Screen Only                                      */}
       {/* ------------------------------------------------------------- */}

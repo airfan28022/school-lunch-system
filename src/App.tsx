@@ -98,6 +98,8 @@ export default function App() {
 
   // Ref to track last updated timestamp from server to prevent overwrite loops
   const lastServerTimestampRef = useRef<string>('');
+  // Ref to track last local save timestamp to protect freshly randomized/saved data from race conditions
+  const lastLocalSaveTimeRef = useRef<number>(0);
 
   // Active / Targeted Month & Year for Report & Planner synchronization
   const [activeReportMonth, setActiveReportMonth] = useState<number>(() => {
@@ -208,6 +210,11 @@ export default function App() {
 
     const pullServerData = async (isInitial = false) => {
       if (isPulling) return;
+      // ป้องกันการดึงข้อมูลทับข้อมูลที่เพิ่งสุ่มหรือบันทึกใหม่ในเครื่องภายใน 45 วินาที
+      if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 45000) {
+        return;
+      }
+
       isPulling = true;
       if (!isInitial) setIsSyncing(true);
       try {
@@ -230,7 +237,25 @@ export default function App() {
           }
 
           if (Array.isArray(data.dailyMenus) && data.dailyMenus.length > 0) {
-            setDailyMenus(data.dailyMenus);
+            setDailyMenus((prev: DailyMenuEntry[]) => {
+              // รวมข้อมูลจากเซิร์ฟเวอร์กับข้อมูลในเครื่องอย่างปลอดภัย ไม่ลบวันที่มีอยู่แล้วในเครื่อง
+              const map = new Map<string, DailyMenuEntry>(
+                data.dailyMenus.map((m: DailyMenuEntry) => [m.date, m])
+              );
+              prev.forEach((localItem: DailyMenuEntry) => {
+                if (!map.has(localItem.date)) {
+                  map.set(localItem.date, localItem);
+                } else {
+                  const serverItem = map.get(localItem.date);
+                  const hasLocalFood = Boolean(localItem.rice || localItem.singleDish || localItem.nonSpicy || localItem.spicy);
+                  const hasServerFood = Boolean(serverItem?.rice || serverItem?.singleDish || serverItem?.nonSpicy || serverItem?.spicy);
+                  if (hasLocalFood && !hasServerFood) {
+                    map.set(localItem.date, localItem);
+                  }
+                }
+              });
+              return Array.from(map.values()).sort((a: DailyMenuEntry, b: DailyMenuEntry) => a.date.localeCompare(b.date));
+            });
           }
         }
       } catch (err) {
@@ -328,6 +353,7 @@ export default function App() {
   // Daily Menu Planner Actions (Module 2)
   // -------------------------------------------------------------
   const handleSaveDailyMenu = async (entry: DailyMenuEntry): Promise<boolean> => {
+    lastLocalSaveTimeRef.current = Date.now();
     const existingIndex = dailyMenus.findIndex((m) => m.date === entry.date);
     let updated: DailyMenuEntry[];
 
@@ -349,6 +375,7 @@ export default function App() {
   };
 
   const handleBatchSaveDailyMenus = async (entries: DailyMenuEntry[]): Promise<boolean> => {
+    lastLocalSaveTimeRef.current = Date.now();
     if (entries.length > 0) {
       const [y, m] = entries[0].date.split('-').map(Number);
       if (y && m) {
@@ -395,6 +422,7 @@ export default function App() {
   };
 
   const handleDeleteDailyMenu = async (dateStr: string) => {
+    lastLocalSaveTimeRef.current = Date.now();
     const updated = dailyMenus.filter((m) => m.date !== dateStr);
     setDailyMenus(updated);
     showToast('ลบข้อมูลเรียบร้อย', `ลบเมนูวันที่ ${dateStr} แล้ว`, 'info');

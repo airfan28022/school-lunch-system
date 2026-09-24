@@ -180,8 +180,14 @@ async function syncFromGas(gasUrl?: string): Promise<boolean> {
         changed = true;
       }
       if (Array.isArray(data.dailyMenu) && data.dailyMenu.length > 0) {
-        current.dailyMenus = data.dailyMenu;
-        changed = true;
+        const map = new Map((current.dailyMenus || []).map((m: any) => [m.date, m]));
+        data.dailyMenu.forEach((m: any) => {
+          if (!map.has(m.date)) {
+            map.set(m.date, m);
+            changed = true;
+          }
+        });
+        current.dailyMenus = Array.from(map.values()).sort((a: any, b: any) => a.date.localeCompare(b.date));
       }
       if (changed) {
         current.lastUpdated = new Date().toISOString();
@@ -271,6 +277,7 @@ async function startServer() {
             action: 'syncAll',
             settings: current.settings,
             menuBank: current.menuBank,
+            dailyMenus: current.dailyMenus,
             dailyMenu: current.dailyMenus
           }).catch((e) => console.warn('Background GAS sync warning:', e.message));
         }, 1200);

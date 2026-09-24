@@ -224,6 +224,7 @@ export function queueDirectGasSync(gasUrl: string, payload: any, delayMs: number
         action: 'syncAll',
         settings: toSend.settings,
         menuBank: toSend.menuBank,
+        dailyMenus: toSend.dailyMenus,
         dailyMenu: toSend.dailyMenus
       });
     } catch (e: any) {

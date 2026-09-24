@@ -829,18 +829,6 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
               <Sparkles className="w-3.5 h-3.5 text-amber-200" />
               <span>{isRandomizing ? 'กำลังจัดเมนู...' : 'สุ่มจัดอาหารกลางวันทั้งเดือน'}</span>
             </button>
-
-            {onNavigateToReport && (
-              <button
-                type="button"
-                onClick={() => onNavigateToReport(randomMonth, randomYear)}
-                className="px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl shadow-2xs hover:shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                title="ไปหน้าพิมพ์รายงานประจำเดือนที่เลือก เพื่อตรวจสอบ แก้ไข หรือพิมพ์"
-              >
-                <Printer className="w-3.5 h-3.5 text-emerald-600" />
-                <span>พิมพ์รายงาน</span>
-              </button>
-            )}
           </div>
         </div>
       </div>
