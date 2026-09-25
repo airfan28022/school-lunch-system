@@ -213,26 +213,19 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 
   // Ensure store exists on startup
+  const isNewStore = !fs.existsSync(STORE_PATH);
   initStore();
 
-  // Instantly trigger initial sync from Google Sheets in background
-  syncFromGas().catch((err) => console.warn('Initial sync error:', err));
-
-  // Run periodic background sync from Google Sheets every 60 seconds (prevents Google quota exhaustion)
-  setInterval(() => {
-    syncFromGas().catch(() => {});
-  }, 60000);
+  // If this is a brand new store without prior data, attempt initial sync once
+  if (isNewStore) {
+    syncFromGas().catch((err) => console.warn('Initial sync notice:', err));
+  }
 
   // -----------------------------------------------------------------
   // 1. GET /api/data - Fetch all synchronized school data
   // -----------------------------------------------------------------
   app.get('/api/data', async (_req, res) => {
     try {
-      const data = readStore();
-      // If store is empty or has fewer than expected items, trigger immediate sync
-      if (!data.dailyMenus || data.dailyMenus.length === 0) {
-        await syncFromGas();
-      }
       const latest = readStore();
       res.json({
         success: true,

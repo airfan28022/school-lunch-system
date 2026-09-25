@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { DailyMenuEntry, SchoolSettings, MenuItem } from '../types';
 import { ConfirmModal } from './ConfirmModal';
+import { generateMonthlyMenu } from '../services/menuRandomizer';
 import { 
   Printer, 
   Search, 
@@ -20,6 +21,8 @@ interface PrintReportProps {
   menuBank?: MenuItem[];
   onSaveDailyMenu?: (entry: DailyMenuEntry) => Promise<boolean> | boolean;
   onDeleteDailyMenu?: (dateStr: string) => Promise<void> | void;
+  onBatchDeleteDailyMenus?: (dates: string[]) => Promise<void> | void;
+  onBatchSaveDailyMenus?: (entries: DailyMenuEntry[]) => Promise<boolean> | boolean;
   initialMonth?: number;
   initialYear?: number;
   onNavigateToPlanner?: (date?: string) => void;
@@ -32,6 +35,8 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   menuBank = [],
   onSaveDailyMenu,
   onDeleteDailyMenu,
+  onBatchDeleteDailyMenus,
+  onBatchSaveDailyMenus,
   initialMonth,
   initialYear,
   onNavigateToPlanner
@@ -112,6 +117,11 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [newDateStr, setNewDateStr] = useState<string>('');
   const [deletingDateStr, setDeletingDateStr] = useState<string | null>(null);
+
+  // Month Deletion & Randomize States (User Requirements)
+  const [isDeleteMonthModalOpen, setIsDeleteMonthModalOpen] = useState<boolean>(false);
+  const [isRandomizeConfirmOpen, setIsRandomizeConfirmOpen] = useState<boolean>(false);
+  const [isRandomizing, setIsRandomizing] = useState<boolean>(false);
 
   // รายการปีทั้งหมดที่สามารถเลือกได้
   const availableYears = useMemo(() => {
@@ -240,6 +250,60 @@ export const PrintReport: React.FC<PrintReportProps> = ({
     }
   };
 
+  // Requirement Fix 1: Delete all entries in the currently viewed month
+  const executeDeleteWholeMonth = async () => {
+    setIsDeleteMonthModalOpen(false);
+    const targetDates = monthEntries.map((e) => e.date);
+    if (targetDates.length === 0) return;
+
+    if (onBatchDeleteDailyMenus) {
+      await onBatchDeleteDailyMenus(targetDates);
+    } else if (onDeleteDailyMenu) {
+      for (const d of targetDates) {
+        await onDeleteDailyMenu(d);
+      }
+    }
+    showToast(
+      'ลบรายการทั้งเดือนเรียบร้อย',
+      `ลบเมนูอาหารประจำเดือน ${thaiMonthName} ${buddhistYear} ทั้งหมด ${targetDates.length} วันแล้ว`,
+      'info'
+    );
+  };
+
+  // Requirement Fix 2: Randomize menu for currently viewed month
+  const executeRandomizeCurrentMonth = async () => {
+    setIsRandomizeConfirmOpen(false);
+    setIsRandomizing(true);
+    try {
+      const generatedEntries = generateMonthlyMenu(selectedMonth, selectedYear, menuBank, dailyMenus);
+      if (onBatchSaveDailyMenus) {
+        await onBatchSaveDailyMenus(generatedEntries);
+      } else if (onSaveDailyMenu) {
+        for (const entry of generatedEntries) {
+          await onSaveDailyMenu(entry);
+        }
+      }
+      showToast(
+        'สุ่มจัดอาหารกลางวันสำเร็จ!',
+        `จัดเมนูอาหารประจำเดือน ${thaiMonthName} ${buddhistYear} ทั้งหมด ${generatedEntries.length} วันทำการ เรียบร้อยแล้ว`,
+        'success'
+      );
+    } catch (err: any) {
+      console.error('Error randomizing monthly menu from report:', err);
+      showToast('เกิดข้อผิดพลาด', err?.message || 'ไม่สามารถสุ่มจัดเมนูได้', 'error');
+    } finally {
+      setIsRandomizing(false);
+    }
+  };
+
+  const handleRandomizeMonthClick = () => {
+    if (monthEntries.length > 0) {
+      setIsRandomizeConfirmOpen(true);
+    } else {
+      executeRandomizeCurrentMonth();
+    }
+  };
+
   // Add new day entry in this month
   const handleAddNewDay = async () => {
     if (!newDateStr) {
@@ -350,6 +414,33 @@ export const PrintReport: React.FC<PrintReportProps> = ({
             พบ {monthEntries.length} วัน
           </span>
 
+          {/* สุ่มจัดอาหารเดือนนี้ (Requirement Fix 2) */}
+          <button
+            type="button"
+            id="btn-randomize-report-month"
+            onClick={handleRandomizeMonthClick}
+            disabled={isRandomizing}
+            className="px-2.5 py-1.5 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 rounded-xl border border-amber-300 flex items-center gap-1 transition-all cursor-pointer shadow-2xs hover:shadow-xs disabled:opacity-50"
+            title={`สุ่มจัดเมนูอาหารกลางวันทั้งเดือน ${thaiMonthName} ${buddhistYear} ตามหลักโภชนาการ`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+            <span>{isRandomizing ? 'กำลังจัดเมนู...' : 'สุ่มจัดอาหารเดือนนี้'}</span>
+          </button>
+
+          {/* ลบรายการทั้งเดือน: เปลี่ยนเป็นไอคอนขยะตามที่ผู้ใช้ร้องขอ */}
+          {monthEntries.length > 0 && (
+            <button
+              type="button"
+              id="btn-delete-report-month"
+              onClick={() => setIsDeleteMonthModalOpen(true)}
+              className="p-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 rounded-xl border border-rose-200 flex items-center justify-center transition-colors cursor-pointer"
+              title={`ลบรายการอาหารทั้งหมดในเดือน ${thaiMonthName} ${buddhistYear} (${monthEntries.length} วัน)`}
+              aria-label={`ลบรายการอาหารทั้งหมดในเดือน ${thaiMonthName} ${buddhistYear}`}
+            >
+              <Trash2 className="w-4 h-4 text-rose-600" />
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => {
@@ -357,10 +448,10 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               setIsAddModalOpen(true);
             }}
             className="px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 flex items-center gap-1 transition-colors cursor-pointer"
-            title="เพิ่มเมนูวันใหม่ในเดือนนี้"
+            title="เพิ่มเมนูวันใหม่"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>เพิ่มวันในเดือนนี้</span>
+            <span>เพิ่มวัน</span>
           </button>
         </div>
 
@@ -456,18 +547,28 @@ export const PrintReport: React.FC<PrintReportProps> = ({
                 </div>
               )}
 
-              {onNavigateToPlanner && (
-                <div className="pt-2 border-t border-amber-200/60 mt-3">
+              <div className="pt-2 border-t border-amber-200/60 mt-3 flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  id="btn-randomize-empty-state"
+                  onClick={executeRandomizeCurrentMonth}
+                  disabled={isRandomizing}
+                  className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-md transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-200" />
+                  <span>{isRandomizing ? 'กำลังสุ่มจัดอาหาร...' : `สุ่มจัดอาหารกลางวันเดือน ${thaiMonthName} ${buddhistYear} ทันที`}</span>
+                </button>
+
+                {onNavigateToPlanner && (
                   <button
                     type="button"
                     onClick={() => onNavigateToPlanner(`${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`)}
-                    className="px-4 py-2 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-md transition-all inline-flex items-center gap-1.5 cursor-pointer"
+                    className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold shadow-2xs transition-all inline-flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Sparkles className="w-4 h-4 text-amber-200" />
-                    <span>ไปหน้าสุ่มจัดอาหารกลางวันเดือน {thaiMonthName} {buddhistYear}</span>
+                    <span>ไปหน้าสุ่มจัดอาหารกลางวัน</span>
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Print Fallback */}
@@ -994,6 +1095,30 @@ export const PrintReport: React.FC<PrintReportProps> = ({
         type="danger"
         onConfirm={executeDeleteRow}
         onCancel={() => setDeletingDateStr(null)}
+      />
+
+      {/* Confirm Delete Whole Month Modal (Requirement Fix 1) */}
+      <ConfirmModal
+        isOpen={isDeleteMonthModalOpen}
+        title="ยืนยันการลบรายการอาหารทั้งเดือน"
+        message={`คุณต้องการลบข้อมูลเมนูอาหารทั้งหมดในเดือน ${thaiMonthName} ${buddhistYear} จำนวน ${monthEntries.length} วัน ใช่หรือไม่?\n\nรายการอาหารทั้งหมดในเดือนนี้จะถูกลบออกจากระบบและไม่สามารถกู้คืนได้`}
+        confirmText={`ยืนยันการลบทั้งเดือน (${monthEntries.length} วัน)`}
+        cancelText="ยกเลิก"
+        type="danger"
+        onConfirm={executeDeleteWholeMonth}
+        onCancel={() => setIsDeleteMonthModalOpen(false)}
+      />
+
+      {/* Confirm Randomize Month Modal (Requirement Fix 2) */}
+      <ConfirmModal
+        isOpen={isRandomizeConfirmOpen}
+        title="ยืนยันการสุ่มจัดอาหารกลางวันใหม่"
+        message={`พบรายการอาหารในเดือน ${thaiMonthName} ${buddhistYear} บันทึกอยู่แล้ว ${monthEntries.length} วัน\n\nต้องการสุ่มจัดเมนูใหม่แทนที่ทั้งหมด หรือไม่?`}
+        confirmText="ยืนยันการจัดใหม่"
+        cancelText="ยกเลิก"
+        type="info"
+        onConfirm={executeRandomizeCurrentMonth}
+        onCancel={() => setIsRandomizeConfirmOpen(false)}
       />
     </div>
   );

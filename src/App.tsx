@@ -236,26 +236,8 @@ export default function App() {
             setMenuBank(data.menuBank);
           }
 
-          if (Array.isArray(data.dailyMenus) && data.dailyMenus.length > 0) {
-            setDailyMenus((prev: DailyMenuEntry[]) => {
-              // รวมข้อมูลจากเซิร์ฟเวอร์กับข้อมูลในเครื่องอย่างปลอดภัย ไม่ลบวันที่มีอยู่แล้วในเครื่อง
-              const map = new Map<string, DailyMenuEntry>(
-                data.dailyMenus.map((m: DailyMenuEntry) => [m.date, m])
-              );
-              prev.forEach((localItem: DailyMenuEntry) => {
-                if (!map.has(localItem.date)) {
-                  map.set(localItem.date, localItem);
-                } else {
-                  const serverItem = map.get(localItem.date);
-                  const hasLocalFood = Boolean(localItem.rice || localItem.singleDish || localItem.nonSpicy || localItem.spicy);
-                  const hasServerFood = Boolean(serverItem?.rice || serverItem?.singleDish || serverItem?.nonSpicy || serverItem?.spicy);
-                  if (hasLocalFood && !hasServerFood) {
-                    map.set(localItem.date, localItem);
-                  }
-                }
-              });
-              return Array.from(map.values()).sort((a: DailyMenuEntry, b: DailyMenuEntry) => a.date.localeCompare(b.date));
-            });
+          if (Array.isArray(data.dailyMenus)) {
+            setDailyMenus(data.dailyMenus);
           }
         }
       } catch (err) {
@@ -366,10 +348,18 @@ export default function App() {
     }
 
     setDailyMenus(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY_DAILY_MENUS, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Storage error', e);
+    }
 
     // ซิงค์เฉพาะวันที่บันทึกไปยัง Google Sheets ใน ~300ms แทนการวนลูปทั้งเดือน
     saveSingleDailyMenuDirect(entry, settings.gasWebAppUrl);
-    saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: false });
+    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: false });
+    if (saveRes && saveRes.lastUpdated) {
+      lastServerTimestampRef.current = saveRes.lastUpdated;
+    }
 
     return true;
   };
@@ -384,16 +374,20 @@ export default function App() {
       }
     }
 
-    let updatedMenus: DailyMenuEntry[] = [];
-    setDailyMenus((prev) => {
-      const map = new Map(prev.map((m) => [m.date, m]));
-      entries.forEach((e) => map.set(e.date, e));
-      updatedMenus = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
-      return updatedMenus;
-    });
+    // Compute updated menus synchronously so saveServerData gets full populated list
+    const map = new Map(dailyMenus.map((m) => [m.date, m]));
+    entries.forEach((e) => map.set(e.date, e));
+    const updated = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+    setDailyMenus(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY_DAILY_MENUS, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Storage error', e);
+    }
 
     // ซิงค์ทั้งเดือนด้วย High-speed Batch mode (ครั้งเดียวจบ ไม่วนลูป 20 ครั้ง)
-    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updatedMenus, syncToGas: true });
+    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
     if (saveRes && saveRes.lastUpdated) {
       lastServerTimestampRef.current = saveRes.lastUpdated;
     }
@@ -425,9 +419,17 @@ export default function App() {
     lastLocalSaveTimeRef.current = Date.now();
     const updated = dailyMenus.filter((m) => m.date !== dateStr);
     setDailyMenus(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY_DAILY_MENUS, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Storage error', e);
+    }
     showToast('ลบข้อมูลเรียบร้อย', `ลบเมนูวันที่ ${dateStr} แล้ว`, 'info');
 
-    await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+    if (saveRes && saveRes.lastUpdated) {
+      lastServerTimestampRef.current = saveRes.lastUpdated;
+    }
 
     if (settings.gasWebAppUrl) {
       try {
@@ -447,9 +449,17 @@ export default function App() {
     const dateSet = new Set(dates);
     const updated = dailyMenus.filter((m) => !dateSet.has(m.date));
     setDailyMenus(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY_DAILY_MENUS, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Storage error', e);
+    }
     showToast('ลบข้อมูลเรียบร้อย', `ลบรายการอาหารที่เลือกจำนวน ${dates.length} วันแล้ว`, 'info');
 
-    await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+    if (saveRes && saveRes.lastUpdated) {
+      lastServerTimestampRef.current = saveRes.lastUpdated;
+    }
 
     if (settings.gasWebAppUrl) {
       try {
@@ -714,6 +724,8 @@ export default function App() {
             menuBank={menuBank}
             onSaveDailyMenu={handleSaveDailyMenu}
             onDeleteDailyMenu={handleDeleteDailyMenu}
+            onBatchDeleteDailyMenus={handleBatchDeleteDailyMenus}
+            onBatchSaveDailyMenus={handleBatchSaveDailyMenus}
             initialMonth={activeReportMonth}
             initialYear={activeReportYear}
             onNavigateToPlanner={handleNavigateToPlanner}
