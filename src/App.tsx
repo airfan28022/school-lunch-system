@@ -441,6 +441,31 @@ export default function App() {
     }
   };
 
+  const handleBatchDeleteDailyMenus = async (dates: string[]) => {
+    if (dates.length === 0) return;
+    lastLocalSaveTimeRef.current = Date.now();
+    const dateSet = new Set(dates);
+    const updated = dailyMenus.filter((m) => !dateSet.has(m.date));
+    setDailyMenus(updated);
+    showToast('ลบข้อมูลเรียบร้อย', `ลบรายการอาหารที่เลือกจำนวน ${dates.length} วันแล้ว`, 'info');
+
+    await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+
+    if (settings.gasWebAppUrl) {
+      try {
+        await callGasPost(settings.gasWebAppUrl, {
+          action: 'syncAll',
+          settings,
+          menuBank,
+          dailyMenus: updated,
+          dailyMenu: updated
+        });
+      } catch (err) {
+        console.warn('GAS batch delete sync warning:', err);
+      }
+    }
+  };
+
   // -------------------------------------------------------------
   // Image & Logo Upload Actions (Google Drive Native)
   // -------------------------------------------------------------
@@ -658,6 +683,7 @@ export default function App() {
             onSaveDailyMenu={handleSaveDailyMenu}
             onBatchSaveDailyMenus={handleBatchSaveDailyMenus}
             onDeleteDailyMenu={handleDeleteDailyMenu}
+            onBatchDeleteDailyMenus={handleBatchDeleteDailyMenus}
             onOpenLightbox={handleOpenLightbox}
             showToast={showToast}
             gasWebAppUrl={settings.gasWebAppUrl}

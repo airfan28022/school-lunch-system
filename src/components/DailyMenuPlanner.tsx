@@ -8,7 +8,6 @@ import {
   ChevronRight, 
   Save, 
   Copy, 
-  Trash2, 
   Pencil,
   Sparkles, 
   ArrowRight, 
@@ -26,6 +25,7 @@ interface DailyMenuPlannerProps {
   onSaveDailyMenu: (entry: DailyMenuEntry, isAutoAdvance?: boolean) => Promise<boolean> | boolean;
   onBatchSaveDailyMenus?: (entries: DailyMenuEntry[]) => Promise<boolean> | boolean;
   onDeleteDailyMenu: (dateStr: string) => Promise<void> | void;
+  onBatchDeleteDailyMenus?: (dates: string[]) => Promise<void> | void;
   onOpenLightbox?: (photo: ActivityPhoto, allPhotos: ActivityPhoto[], onReplace?: (newPhoto: ActivityPhoto) => void, onDelete?: () => void) => void;
   showToast: (title: string, message?: string, type?: 'success' | 'info' | 'warning' | 'error') => void;
   gasWebAppUrl?: string;
@@ -53,6 +53,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   onSaveDailyMenu,
   onBatchSaveDailyMenus,
   onDeleteDailyMenu,
+  onBatchDeleteDailyMenus,
   onOpenLightbox,
   showToast,
   gasWebAppUrl,
@@ -128,6 +129,11 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   // Minimal Confirmation Dialog States
   const [deleteConfirmDate, setDeleteConfirmDate] = useState<string | null>(null);
   const [randomizeConfirmData, setRandomizeConfirmData] = useState<{ count: number; total: number } | null>(null);
+
+  // Multi-selection state for batch deleting daily menus
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [batchDeleteConfirmOpen, setBatchDeleteConfirmOpen] = useState<boolean>(false);
+  const [isSelectMode, setIsSelectMode] = useState<boolean>(false);
 
   // Load existing menu data whenever selectedDate changes
   useEffect(() => {
@@ -296,9 +302,41 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
     if (!deleteConfirmDate) return;
     const targetDate = deleteConfirmDate;
     setDeleteConfirmDate(null);
+    setSelectedDates((prev) => prev.filter((d) => d !== targetDate));
     await onDeleteDailyMenu(targetDate);
     showToast('ลบรายการสำเร็จ', `ลบรายการอาหารวันที่ ${formatThaiDisplay(targetDate)} เรียบร้อยแล้ว`, 'info');
     if (selectedDate === targetDate) {
+      setRice('');
+      setSingleDish('');
+      setSpicy('');
+      setNonSpicy('');
+      setDessert('');
+      setNote('');
+    }
+  };
+
+  // Action: Batch Delete Entries
+  const handleBatchDeleteClick = () => {
+    if (selectedDates.length === 0) return;
+    setBatchDeleteConfirmOpen(true);
+  };
+
+  const executeBatchDelete = async () => {
+    if (selectedDates.length === 0) return;
+    const toDelete = [...selectedDates];
+    setBatchDeleteConfirmOpen(false);
+    setSelectedDates([]);
+
+    if (onBatchDeleteDailyMenus) {
+      await onBatchDeleteDailyMenus(toDelete);
+    } else {
+      for (const d of toDelete) {
+        await onDeleteDailyMenu(d);
+      }
+      showToast('ลบรายการสำเร็จ', `ลบรายการอาหารที่เลือกจำนวน ${toDelete.length} วันเรียบร้อยแล้ว`, 'info');
+    }
+
+    if (toDelete.includes(selectedDate)) {
       setRice('');
       setSingleDish('');
       setSpicy('');
@@ -761,6 +799,35 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
       );
     });
   }, [dailyMenus, calendarSearchQuery]);
+
+  // Selection helpers for batch selection in the saved menus table
+  const isAllSelected = useMemo(() => {
+    if (filteredCalendarEntries.length === 0) return false;
+    return filteredCalendarEntries.every((entry) => selectedDates.includes(entry.date));
+  }, [filteredCalendarEntries, selectedDates]);
+
+  const isSomeSelected = useMemo(() => {
+    if (selectedDates.length === 0) return false;
+    return !isAllSelected && filteredCalendarEntries.some((entry) => selectedDates.includes(entry.date));
+  }, [filteredCalendarEntries, selectedDates, isAllSelected]);
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      // Unselect all in current filtered view
+      const currentViewDates = new Set(filteredCalendarEntries.map((e) => e.date));
+      setSelectedDates((prev) => prev.filter((d) => !currentViewDates.has(d)));
+    } else {
+      // Select all in current filtered view
+      const currentViewDates = filteredCalendarEntries.map((e) => e.date);
+      setSelectedDates((prev) => Array.from(new Set([...prev, ...currentViewDates])));
+    }
+  };
+
+  const toggleSelectDate = (dateStr: string) => {
+    setSelectedDates((prev) =>
+      prev.includes(dateStr) ? prev.filter((d) => d !== dateStr) : [...prev, dateStr]
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -1375,38 +1442,92 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
       <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <span>ปฏิทินเมนูที่บันทึกแล้วในระบบ</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-sm font-bold text-slate-900">
+                เมนูที่บันทึกแล้ว
+              </h3>
+
+              {/* ไอคอนแก้ไข อยู่ข้างๆคำว่า เมนูที่บันทึกแล้ว เมื่อกดจึงจะแสดงสี่เหลี่ยมให้ติ๊กถูก */}
+              <button
+                type="button"
+                id="btn-toggle-select-edit-mode"
+                onClick={() => {
+                  setIsSelectMode((prev) => {
+                    if (prev) {
+                      setSelectedDates([]);
+                    }
+                    return !prev;
+                  });
+                }}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                  isSelectMode
+                    ? 'bg-orange-600 text-white border-orange-700 shadow-xs hover:bg-orange-700'
+                    : 'bg-slate-100 hover:bg-orange-50 text-slate-700 hover:text-orange-700 border-slate-200 hover:border-orange-200'
+                }`}
+                title={isSelectMode ? 'กดเพื่อเสร็จสิ้นโหมดแก้ไข' : 'กดไอคอนแก้ไขเพื่อแสดงช่องติ๊กเลือกรายการ'}
+                aria-label="ไอคอนแก้ไข"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>{isSelectMode ? 'เสร็จสิ้น' : 'แก้ไข'}</span>
+              </button>
+
               <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 font-semibold">
                 {calendarSearchQuery.trim() ? `พบ ${filteredCalendarEntries.length} จาก ${dailyMenus.length} วัน` : `${dailyMenus.length} วัน`}
               </span>
-            </h3>
-            <p className="text-xs text-slate-500">
-              ค้นหาเมนูที่ต้องการ แล้วกดปุ่ม <span className="text-blue-600 font-semibold">"คัดลอก"</span> เพื่อนำไปใส่ในวันที่กำลังจัดเมนูด้านบนได้ทันที
+            </div>
+            <p className="text-xs text-slate-500 mt-1">
+              {isSelectMode
+                ? 'โหมดแก้ไขเปิดอยู่: สามารถติ๊กเลือกหลายรายการเพื่อลบพร้อมกันได้'
+                : 'ค้นหาเมนูที่ต้องการ แล้วกดปุ่ม "คัดลอก" เพื่อนำไปใส่ในวันที่กำลังจัดเมนูด้านบนได้ทันที'}
             </p>
           </div>
 
-          {/* Search Box for Menus to Copy */}
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              id="input-search-calendar-menu"
-              value={calendarSearchQuery}
-              onChange={(e) => setCalendarSearchQuery(e.target.value)}
-              placeholder="ค้นหาเมนูเพื่อคัดลอก (เช่น ข้าวมันไก่, แกงส้ม, ต้มยำ)..."
-              className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all outline-none"
-            />
-            {calendarSearchQuery && (
-              <button
-                type="button"
-                onClick={() => setCalendarSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full"
-                title="ล้างคำค้นหา"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* ปุ่มลบหลายรายการ: อิโมจิลบจะแสดงก็ต่อเมื่อเลือกรายการในโหมดแก้ไข */}
+            {isSelectMode && selectedDates.length > 0 && (
+              <div className="flex items-center gap-1.5 animate-in fade-in">
+                <button
+                  type="button"
+                  id="btn-batch-delete-daily-menus"
+                  onClick={handleBatchDeleteClick}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-md transition-all cursor-pointer"
+                  title="ลบรายการอาหารที่เลือกทั้งหมด"
+                >
+                  <span className="text-sm leading-none" role="img" aria-label="ลบ">🗑️</span>
+                  <span>ลบที่เลือก ({selectedDates.length} รายการ)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDates([])}
+                  className="px-2 py-1.5 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                >
+                  ยกเลิกเลือก
+                </button>
+              </div>
             )}
+
+            {/* Search Box for Menus to Copy */}
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                id="input-search-calendar-menu"
+                value={calendarSearchQuery}
+                onChange={(e) => setCalendarSearchQuery(e.target.value)}
+                placeholder="ค้นหาเมนูเพื่อคัดลอก (เช่น ข้าวมันไก่, แกงส้ม, ต้มยำ)..."
+                className="w-full pl-9 pr-8 py-2 text-xs bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all outline-none"
+              />
+              {calendarSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setCalendarSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full"
+                  title="ล้างคำค้นหา"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1414,7 +1535,23 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-orange-50/70 border-b border-orange-100 text-orange-950 font-bold">
-                <th className="py-2.5 px-3 text-center rounded-l-lg whitespace-nowrap w-36 sm:w-44">วันที่</th>
+                {/* ช่องติ๊กถูก/เลือก อยู่ข้างหน้าสุด (แสดงเฉพาะเมื่อกดไอคอนแก้ไข) */}
+                {isSelectMode && (
+                  <th className="py-2.5 px-3 text-center rounded-l-lg w-10">
+                    <input
+                      type="checkbox"
+                      checked={isAllSelected}
+                      ref={(el) => {
+                        if (el) el.indeterminate = isSomeSelected;
+                      }}
+                      onChange={handleToggleSelectAll}
+                      className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 cursor-pointer accent-orange-600 align-middle"
+                      title={isAllSelected ? 'ยกเลิกการเลือกทั้งหมด' : 'เลือกทั้งหมด'}
+                      aria-label="เลือกทั้งหมด"
+                    />
+                  </th>
+                )}
+                <th className={`py-2.5 px-3 text-center whitespace-nowrap w-36 sm:w-44 ${!isSelectMode ? 'rounded-l-lg' : ''}`}>วันที่</th>
                 <th className="py-2.5 px-4 text-center">รายการอาหาร</th>
                 <th className="py-2.5 px-3 text-center whitespace-nowrap w-36 sm:w-48">หมายเหตุ</th>
                 <th className="py-2.5 px-3 text-center rounded-r-lg whitespace-nowrap w-28">จัดการ</th>
@@ -1423,13 +1560,13 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
             <tbody className="divide-y divide-slate-100">
               {dailyMenus.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-400">
+                  <td colSpan={isSelectMode ? 5 : 4} className="py-8 text-center text-slate-400">
                     ยังไม่มีรายการอาหารที่บันทึกไว้ในระบบ สามารถเริ่มสุ่มหรือกรอกเมนูได้จากด้านบน
                   </td>
                 </tr>
               ) : filteredCalendarEntries.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-400">
+                  <td colSpan={isSelectMode ? 5 : 4} className="py-8 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center gap-1.5">
                       <p className="font-medium text-slate-600">ไม่พบรายการอาหารที่ตรงกับ "{calendarSearchQuery}"</p>
                       <p className="text-xs text-slate-400">ลองค้นหาด้วยชื่อเมนูอื่น หรือกดล้างคำค้นหา</p>
@@ -1439,6 +1576,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
               ) : (
                 filteredCalendarEntries.map((entry) => {
                   const isCurrent = entry.date === selectedDate;
+                  const isSelected = selectedDates.includes(entry.date);
                   const parts = entry.date.split('-').map(Number);
                   const d = new Date(parts[0], parts[1] - 1, parts[2]);
                   const isMonday = d.getDay() === 1;
@@ -1447,15 +1585,40 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                   return (
                     <tr
                       key={entry.date}
-                      onClick={() => handleEditEntry(entry)}
+                      onClick={() => {
+                        if (isSelectMode) {
+                          toggleSelectDate(entry.date);
+                        } else {
+                          handleEditEntry(entry);
+                        }
+                      }}
                       className={`cursor-pointer transition-colors ${
-                        isCurrent
+                        isSelected && isSelectMode
+                          ? 'bg-rose-50/60 font-medium'
+                          : isCurrent
                           ? 'bg-orange-100/60 font-medium'
                           : isMonday
                           ? 'bg-amber-50/50 hover:bg-amber-100/40'
                           : 'hover:bg-slate-50'
                       }`}
                     >
+                      {/* ช่องติ๊กถูก/เลือก อยู่ข้างหน้าสุด (แสดงเฉพาะเมื่อกดไอคอนแก้ไข) */}
+                      {isSelectMode && (
+                        <td
+                          className="py-2.5 px-3 text-center whitespace-nowrap"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelectDate(entry.date)}
+                            className="w-4 h-4 rounded text-orange-600 focus:ring-orange-500 cursor-pointer accent-orange-600 align-middle"
+                            title={`เลือกรายการวันที่ ${formatShortDate(entry.date)}`}
+                            aria-label={`เลือกรายการวันที่ ${formatShortDate(entry.date)}`}
+                          />
+                        </td>
+                      )}
+
                       {/* 1. วันที่: รูปแบบสั้นเหมือนรายงานพิมพ์ (จ. 1/9/69) พร้อมวันที่เต็ม */}
                       <td className="py-2.5 px-3 whitespace-nowrap text-center">
                         <div className="font-bold text-slate-900 flex items-center justify-center gap-1.5">
@@ -1511,16 +1674,18 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                             <Pencil className="w-4 h-4" />
                           </button>
 
-                          {/* Delete icon */}
-                          <button
-                            type="button"
-                            id={`btn-delete-entry-${entry.date}`}
-                            onClick={() => handleDeleteEntry(entry.date)}
-                            className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                            title="ลบรายการอาหารวันนี้"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {/* Delete icon: อิโมจิลบจะแสดงก็ต่อเมื่อเลือกรายการ */}
+                          {isSelected && isSelectMode && (
+                            <button
+                              type="button"
+                              id={`btn-delete-entry-${entry.date}`}
+                              onClick={() => handleDeleteEntry(entry.date)}
+                              className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-all cursor-pointer animate-in fade-in"
+                              title="ลบรายการอาหารวันนี้"
+                            >
+                              <span className="text-sm leading-none" role="img" aria-label="ลบ">🗑️</span>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1532,7 +1697,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
         </div>
       </div>
 
-      {/* Delete Entry Confirm Modal */}
+      {/* Delete Single Entry Confirm Modal */}
       <ConfirmModal
         isOpen={Boolean(deleteConfirmDate)}
         title="ยืนยันการลบรายการอาหาร"
@@ -1546,6 +1711,18 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
         type="danger"
         onConfirm={executeDeleteEntry}
         onCancel={() => setDeleteConfirmDate(null)}
+      />
+
+      {/* Batch Delete Confirm Modal */}
+      <ConfirmModal
+        isOpen={batchDeleteConfirmOpen}
+        title="ยืนยันการลบรายการอาหารที่เลือก"
+        message={`คุณต้องการลบรายการอาหารที่เลือกไว้ทั้งหมดจำนวน ${selectedDates.length} วัน หรือไม่? รายการที่ถูกลบจะไม่สามารถกู้คืนได้`}
+        confirmText={`ลบที่เลือก (${selectedDates.length} วัน)`}
+        cancelText="ยกเลิก"
+        type="danger"
+        onConfirm={executeBatchDelete}
+        onCancel={() => setBatchDeleteConfirmOpen(false)}
       />
 
       {/* Randomize Month Overwrite Confirm Modal */}
