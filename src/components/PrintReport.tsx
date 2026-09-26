@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { DailyMenuEntry, SchoolSettings, MenuItem } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { generateMonthlyMenu } from '../services/menuRandomizer';
@@ -11,8 +11,301 @@ import {
   Plus, 
   X, 
   Save, 
-  Sparkles 
+  Sparkles,
+  BookOpen,
+  ChevronDown
 } from 'lucide-react';
+
+/**
+ * MenuFieldInput: Clean & Minimal input field with:
+ * 1. Direct free typing with instant matching suggestions ("และให้สามารถพิมพ์ได้เหมือนเดิม และขึ้นเมนูที่เรากำลังพิมพ์")
+ * 2. Dedicated button in the field to browse and pick from Menu Bank ("อยากให้มีปุ่มที่กดเพื่อเลือกรายการอาหารจากคลังเมนูในช่องกรอกเมนู")
+ * 3. Minimal, uncluttered UI design ("ทำแบบหน้าสะอาดมินิมัล")
+ */
+interface MenuFieldInputProps {
+  id: string;
+  label: string;
+  dotColor: string;
+  value: string;
+  onChange: (val: string) => void;
+  disabled?: boolean;
+  disabledReason?: string;
+  placeholder?: string;
+  categoryName: string;
+  categoryFilter: (cat: string) => boolean;
+  menuBank: MenuItem[];
+  onSelect?: (val: string) => void;
+}
+
+const MenuFieldInput: React.FC<MenuFieldInputProps> = ({
+  id,
+  label,
+  dotColor,
+  value,
+  onChange,
+  disabled = false,
+  disabledReason,
+  placeholder,
+  categoryName,
+  categoryFilter,
+  menuBank,
+  onSelect
+}) => {
+  const [isBankOpen, setIsBankOpen] = useState<boolean>(false);
+  const [isSuggestOpen, setIsSuggestOpen] = useState<boolean>(false);
+  const [bankSearchQuery, setBankSearchQuery] = useState<string>('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close popovers on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsBankOpen(false);
+        setIsSuggestOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // All menu items belonging to this category
+  const allCategoryItems = useMemo(() => {
+    return menuBank.filter((m) => categoryFilter(m.category));
+  }, [menuBank, categoryFilter]);
+
+  // Filtered items inside the Bank Picker Popover
+  const filteredBankItems = useMemo(() => {
+    if (!bankSearchQuery.trim()) return allCategoryItems;
+    const q = bankSearchQuery.toLowerCase().trim();
+    return allCategoryItems.filter((m) => m.menuName.toLowerCase().includes(q));
+  }, [allCategoryItems, bankSearchQuery]);
+
+  // Live autocomplete suggestions while typing
+  const liveSuggestions = useMemo(() => {
+    if (!value.trim()) return [];
+    const q = value.toLowerCase().trim();
+    return allCategoryItems
+      .filter((m) => m.menuName.toLowerCase().includes(q))
+      .slice(0, 10);
+  }, [allCategoryItems, value]);
+
+  const handleSelectItem = (itemName: string) => {
+    onChange(itemName);
+    if (onSelect) onSelect(itemName);
+    setIsBankOpen(false);
+    setIsSuggestOpen(false);
+  };
+
+  return (
+    <div ref={containerRef} className="relative mb-3.5">
+      {/* Label with Category and Count */}
+      <div className="flex items-center justify-between mb-1.5">
+        <label htmlFor={id} className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+          <span className={`w-2.5 h-2.5 rounded-full ${dotColor} inline-block shrink-0`} />
+          <span>{label}</span>
+          {disabled && disabledReason && (
+            <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
+              ({disabledReason})
+            </span>
+          )}
+        </label>
+        {!disabled && (
+          <span className="text-[10px] text-slate-400">
+            ในคลัง {allCategoryItems.length} เมนู
+          </span>
+        )}
+      </div>
+
+      {/* Input Field with embedded action buttons */}
+      <div className="relative flex items-center">
+        <input
+          id={id}
+          type="text"
+          value={value}
+          disabled={disabled}
+          placeholder={disabled ? (disabledReason ? `ปิดไม่ให้กรอก (${disabledReason})` : 'ปิดไม่ให้กรอก') : (placeholder || 'พิมพ์ชื่อเมนู หรือกดเลือกจากคลัง...')}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setIsSuggestOpen(true);
+            setIsBankOpen(false);
+          }}
+          onFocus={() => {
+            if (!disabled && value.trim()) {
+              setIsSuggestOpen(true);
+            }
+          }}
+          className={`w-full pl-3.5 pr-28 py-2 text-xs sm:text-sm rounded-xl transition-all ${
+            disabled
+              ? 'bg-slate-100/80 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
+              : 'bg-slate-50 border border-slate-300 hover:border-slate-400 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-slate-800'
+          }`}
+        />
+
+        {/* Embedded action buttons inside input */}
+        <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          {/* Quick Clear Button */}
+          {value && !disabled && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange('');
+                setIsSuggestOpen(false);
+              }}
+              className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-md transition-colors cursor-pointer"
+              title="ล้างข้อความ"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Separator */}
+          {!disabled && <div className="h-4 w-px bg-slate-200" />}
+
+          {/* Button to choose from Menu Bank */}
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => {
+              if (disabled) return;
+              setIsBankOpen(!isBankOpen);
+              setIsSuggestOpen(false);
+              setBankSearchQuery('');
+            }}
+            className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg border transition-all cursor-pointer select-none ${
+              disabled
+                ? 'opacity-40 cursor-not-allowed border-slate-200 text-slate-400'
+                : isBankOpen
+                ? 'bg-orange-600 text-white border-orange-600 shadow-2xs'
+                : 'bg-white hover:bg-orange-50 text-slate-700 hover:text-orange-700 border-slate-300 hover:border-orange-300 shadow-2xs'
+            }`}
+            title="กดเพื่อเลือกรายการอาหารจากคลังเมนู (กรณีจำเมนูไม่ได้)"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-orange-600" />
+            <span className="text-[11px] font-semibold">เลือกจากคลัง</span>
+            <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isBankOpen ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      {/* 1. Live Autocomplete Suggestions Dropdown while typing ("ขึ้นเมนูที่เรากำลังพิมพ์") */}
+      {isSuggestOpen && !disabled && value.trim().length > 0 && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-xl shadow-xl border border-slate-200 p-1.5 max-h-56 overflow-y-auto animate-in fade-in zoom-in-95">
+          <div className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between border-b border-slate-100 mb-1">
+            <span className="flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-orange-500" />
+              เมนูในคลังที่ตรงกับที่คุณพิมพ์
+            </span>
+            <span>{liveSuggestions.length} รายการ</span>
+          </div>
+
+          {liveSuggestions.length > 0 ? (
+            <div className="space-y-0.5">
+              {liveSuggestions.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelectItem(item.menuName)}
+                  className="w-full text-left px-2.5 py-1.5 rounded-lg text-xs hover:bg-orange-50 hover:text-orange-950 flex items-center justify-between transition-colors cursor-pointer group"
+                >
+                  <span className="font-medium text-slate-800 group-hover:text-orange-900">
+                    {item.menuName}
+                  </span>
+                  <span className="text-[10px] text-slate-400 group-hover:text-orange-600">
+                    เลือก
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="p-2 text-center text-xs text-slate-500">
+              <p className="font-medium text-slate-700">
+                ไม่พบ &ldquo;{value}&rdquo; ในคลังเมนู
+              </p>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                คุณสามารถพิมพ์ชื่อเมนูนี้เพื่อใช้งานได้เลย หรือกดปุ่ม &ldquo;เลือกจากคลัง&rdquo; เพื่อดูรายการทั้งหมด
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 2. Full Menu Bank Picker Popover ("ปุ่มที่กดเพื่อเลือกรายการอาหารจากคลังเมนู") */}
+      {isBankOpen && !disabled && (
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 max-h-72 flex flex-col animate-in fade-in zoom-in-95">
+          <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+            <div className="flex items-center gap-1.5">
+              <BookOpen className="w-4 h-4 text-orange-600" />
+              <span className="text-xs font-bold text-slate-900">
+                คลังเมนูหมวด: {categoryName}
+              </span>
+              <span className="text-[10px] bg-orange-100 text-orange-800 font-semibold px-1.5 py-0.5 rounded-md">
+                {allCategoryItems.length} รายการ
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsBankOpen(false)}
+              className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Search inside Bank Picker */}
+          <div className="relative mb-2">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder={`ค้นหาในคลัง (${allCategoryItems.length} เมนู)...`}
+              value={bankSearchQuery}
+              onChange={(e) => setBankSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:ring-1 focus:ring-orange-500 outline-none"
+              autoFocus
+            />
+          </div>
+
+          {/* Scrollable List of Items */}
+          <div className="flex-1 overflow-y-auto space-y-1 pr-1">
+            {filteredBankItems.length > 0 ? (
+              filteredBankItems.map((item) => {
+                const isSelected = value === item.menuName;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleSelectItem(item.menuName)}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-orange-600 text-white font-bold shadow-xs'
+                        : 'bg-slate-50 hover:bg-orange-50 text-slate-800 hover:text-orange-950 border border-slate-100 hover:border-orange-200'
+                    }`}
+                  >
+                    <span className="truncate">{item.menuName}</span>
+                    {isSelected ? (
+                      <span className="text-[10px] ml-2 shrink-0 text-orange-100 font-bold">
+                        ✓ เลือกอยู่
+                      </span>
+                    ) : (
+                      <span className="text-[10px] ml-2 shrink-0 text-slate-400">
+                        เลือก
+                      </span>
+                    )}
+                  </button>
+                );
+              })
+            ) : (
+              <div className="py-4 text-center text-xs text-slate-400">
+                {allCategoryItems.length === 0
+                  ? 'ยังไม่มีรายการอาหารหมวดนี้ในคลังเมนู'
+                  : 'ไม่พบเมนูที่ค้นหาในคลัง'}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 interface PrintReportProps {
   dailyMenus: DailyMenuEntry[];
@@ -109,9 +402,6 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   const [editSpicy, setEditSpicy] = useState<string>('');
   const [editDessert, setEditDessert] = useState<string>('');
   const [editNote, setEditNote] = useState<string>('');
-
-  // Active field focus for suggestion display
-  const [activeField, setActiveField] = useState<string | null>(null);
 
   // Add New Date Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -217,7 +507,6 @@ export const PrintReport: React.FC<PrintReportProps> = ({
     setEditSpicy(entry.spicy || '');
     setEditDessert(entry.dessert || '');
     setEditNote(entry.note || '');
-    setActiveField(null);
   };
 
   // Save changes from Edit Modal
@@ -341,45 +630,6 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   const handlePrint = () => {
     window.print();
   };
-
-  /**
-   * Requirement 1.1: Auto-suggestions from MenuBank for each field
-   */
-  const getSuggestions = (categoryFilter: (cat: string) => boolean, query: string) => {
-    const q = query.trim().toLowerCase();
-    return menuBank
-      .filter((m) => categoryFilter(m.category))
-      .filter((m) => !q || m.menuName.toLowerCase().includes(q))
-      .slice(0, 8);
-  };
-
-  const riceSuggestions = useMemo(() => 
-    getSuggestions((cat) => cat === 'ข้าว', editRice),
-    [menuBank, editRice]
-  );
-
-  const singleDishSuggestions = useMemo(() => 
-    getSuggestions((cat) => cat === 'อาหารจานเดียว', editSingleDish),
-    [menuBank, editSingleDish]
-  );
-
-  const nonSpicySuggestions = useMemo(() => 
-    getSuggestions((cat) => cat === 'อาหารไม่เผ็ด', editNonSpicy),
-    [menuBank, editNonSpicy]
-  );
-
-  const spicySuggestions = useMemo(() => 
-    getSuggestions((cat) => cat === 'อาหารเผ็ด', editSpicy),
-    [menuBank, editSpicy]
-  );
-
-  const dessertSuggestions = useMemo(() => 
-    getSuggestions(
-      (cat) => cat === 'ผลไม้' || cat === 'ของหวาน' || cat === 'ผลไม้-ของหวาน',
-      editDessert
-    ),
-    [menuBank, editDessert]
-  );
 
   const thaiMonthName = THAI_MONTHS[selectedMonth - 1];
   const buddhistYear = selectedYear + 543;
@@ -636,8 +886,18 @@ export const PrintReport: React.FC<PrintReportProps> = ({
                     </td>
 
                     {/* 2. รายการอาหาร เช่น ข้าวสวย + ผัดเผ็ด + แกงจืด + ส้ม */}
-                    <td className="col-print-menu p-2.5 sm:p-3 border border-slate-700 text-slate-900 font-medium">
-                      {mealString}
+                    {/* 2. รายการอาหาร เช่น ข้าวสวย + ผัดเผ็ด + แกงจืด + ส้ม */}
+                    <td 
+                      className="col-print-menu p-2.5 sm:p-3 border border-slate-700 text-slate-900 font-medium cursor-pointer hover:bg-orange-50/60 transition-colors group"
+                      onClick={() => handleOpenEdit(entry)}
+                      title="คลิกเพื่อแก้ไขรายการอาหารวันนี้"
+                    >
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span>{mealString}</span>
+                        <span className="no-print opacity-0 group-hover:opacity-100 text-blue-600 transition-opacity p-0.5" title="แก้ไขรายการอาหาร">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
                     </td>
 
                     {/* 3. หมายเหตุ */}
@@ -677,7 +937,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* Edit Entry Modal (Requirement 1.1 Connected to MenuBank)     */}
+      {/* Edit Entry Modal (Connected to MenuBank with Minimal UI)      */}
       {/* ------------------------------------------------------------- */}
       {editingEntry && (
         <div className="no-print fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -707,337 +967,147 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               const isSingleDishFilled = Boolean(editSingleDish.trim());
 
               return (
-                <form onSubmit={handleSaveEdit} className="space-y-4">
-                  {/* 1. ข้าว (เชื่อมต่อกับคลังเมนู) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
-                        1. ข้าว
-                        {isSingleDishFilled && (
-                          <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
-                            (ปิดไม่ให้กรอก เนื่องจากระบุอาหารจานเดียวแล้ว)
-                          </span>
-                        )}
-                      </label>
-                      {riceSuggestions.length > 0 && !isSingleDishFilled && (
-                        <span className="text-[10px] text-amber-600 flex items-center gap-0.5">
-                          <Sparkles className="w-3 h-3" />
-                          ในคลัง: {riceSuggestions.length} รายการ
-                        </span>
-                      )}
-                    </div>
+                <form onSubmit={handleSaveEdit} className="space-y-3.5">
+                  {/* 1. ข้าว */}
+                  <MenuFieldInput
+                    id="edit-field-rice"
+                    label="1. ข้าว"
+                    dotColor="bg-amber-500"
+                    value={editRice}
+                    onChange={(val) => {
+                      setEditRice(val);
+                      if (val.trim()) setEditSingleDish('');
+                    }}
+                    disabled={isSingleDishFilled}
+                    disabledReason="ระบุอาหารจานเดียวแล้ว"
+                    placeholder="พิมพ์ชื่อข้าว เช่น ข้าวสวย ข้าวกล้อง หรือกดเลือกจากคลัง..."
+                    categoryName="ข้าว"
+                    categoryFilter={(cat) => cat === 'ข้าว'}
+                    menuBank={menuBank}
+                    onSelect={() => setEditSingleDish('')}
+                  />
+
+                  {/* 2. อาหารจานเดียว */}
+                  <MenuFieldInput
+                    id="edit-field-singledish"
+                    label="2. อาหารจานเดียว"
+                    dotColor="bg-orange-500"
+                    value={editSingleDish}
+                    onChange={(val) => {
+                      setEditSingleDish(val);
+                      if (val.trim()) {
+                        setEditRice('');
+                        setEditNonSpicy('');
+                        setEditSpicy('');
+                      }
+                    }}
+                    disabled={isSetMealFilled}
+                    disabledReason="ระบุข้าวหรือกับข้าวแล้ว"
+                    placeholder="เช่น ข้าวมันไก่ตอน, ก๋วยเตี๋ยวหมูสับ หรือกดเลือกจากคลัง..."
+                    categoryName="อาหารจานเดียว"
+                    categoryFilter={(cat) => cat === 'อาหารจานเดียว'}
+                    menuBank={menuBank}
+                    onSelect={() => {
+                      setEditRice('');
+                      setEditNonSpicy('');
+                      setEditSpicy('');
+                    }}
+                  />
+
+                  {/* 3. อาหารไม่เผ็ด */}
+                  <MenuFieldInput
+                    id="edit-field-nonspicy"
+                    label="3. อาหารไม่เผ็ด"
+                    dotColor="bg-emerald-500"
+                    value={editNonSpicy}
+                    onChange={(val) => {
+                      setEditNonSpicy(val);
+                      if (val.trim()) setEditSingleDish('');
+                    }}
+                    disabled={isSingleDishFilled}
+                    disabledReason="ระบุอาหารจานเดียวแล้ว"
+                    placeholder="เช่น ต้มจืดเต้าหู้หมูสับ, ไข่พะโล้ หรือกดเลือกจากคลัง..."
+                    categoryName="อาหารไม่เผ็ด"
+                    categoryFilter={(cat) => cat === 'อาหารไม่เผ็ด'}
+                    menuBank={menuBank}
+                    onSelect={() => setEditSingleDish('')}
+                  />
+
+                  {/* 4. อาหารเผ็ด */}
+                  <MenuFieldInput
+                    id="edit-field-spicy"
+                    label="4. อาหารเผ็ด"
+                    dotColor="bg-rose-500"
+                    value={editSpicy}
+                    onChange={(val) => {
+                      setEditSpicy(val);
+                      if (val.trim()) setEditSingleDish('');
+                    }}
+                    disabled={isSingleDishFilled}
+                    disabledReason="ระบุอาหารจานเดียวแล้ว"
+                    placeholder="เช่น แกงส้มชะอมกุ้ง, ผัดกะเพราหมูสับ หรือกดเลือกจากคลัง..."
+                    categoryName="อาหารเผ็ด"
+                    categoryFilter={(cat) => cat === 'อาหารเผ็ด'}
+                    menuBank={menuBank}
+                    onSelect={() => setEditSingleDish('')}
+                  />
+
+                  {/* 5. ผลไม้-ของหวาน */}
+                  <MenuFieldInput
+                    id="edit-field-dessert"
+                    label="5. ผลไม้-ของหวาน"
+                    dotColor="bg-teal-500"
+                    value={editDessert}
+                    onChange={(val) => setEditDessert(val)}
+                    placeholder="เช่น ส้มเขียวหวาน, บัวลอยเผือก หรือกดเลือกจากคลัง..."
+                    categoryName="ผลไม้-ของหวาน"
+                    categoryFilter={(cat) => cat === 'ผลไม้' || cat === 'ของหวาน' || cat === 'ขนมหวาน' || cat === 'ผลไม้-ของหวาน'}
+                    menuBank={menuBank}
+                  />
+
+                  {/* 6. หมายเหตุ */}
+                  <div className="mb-4">
+                    <label htmlFor="edit-field-note" className="block text-xs font-bold text-slate-700 mb-1">
+                      6. หมายเหตุ
+                    </label>
                     <input
+                      id="edit-field-note"
                       type="text"
-                      placeholder={isSingleDishFilled ? "ปิดไม่ให้กรอก (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "พิมพ์ค้นหาหรือเลือกจากคลังเมนู..."}
-                      value={editRice}
-                      disabled={isSingleDishFilled}
-                      onFocus={() => {
-                        if (!isSingleDishFilled) setActiveField('rice');
-                      }}
-                      onChange={(e) => {
-                        setEditRice(e.target.value);
-                        if (e.target.value.trim()) setEditSingleDish('');
-                      }}
-                      className={`w-full px-3 py-2 text-xs rounded-xl transition-all ${
-                        isSingleDishFilled
-                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
-                          : 'bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500'
-                      }`}
+                      placeholder="หมายเหตุเพิ่มเติม (ถ้ามี)..."
+                      value={editNote}
+                      onChange={(e) => setEditNote(e.target.value)}
+                      className="w-full px-3.5 py-2 text-xs sm:text-sm bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-slate-800"
                     />
-                    {/* Suggestions pill list */}
-                    {riceSuggestions.length > 0 && !isSingleDishFilled && (
-                      <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-amber-50/50 rounded-xl border border-amber-200/60 max-h-24 overflow-y-auto">
-                        {riceSuggestions.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => {
-                              setEditRice(item.menuName);
-                              setEditSingleDish('');
-                            }}
-                            className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
-                              editRice === item.menuName 
-                                ? 'bg-amber-600 text-white border-amber-600 font-bold' 
-                                : 'bg-white hover:bg-amber-100 hover:border-amber-300 text-slate-700 border-slate-200'
-                            }`}
-                          >
-                            {item.menuName}
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
-                  {/* 2. อาหารจานเดียว (เชื่อมต่อกับคลังเมนู) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block"></span>
-                        2. อาหารจานเดียว
-                        {isSetMealFilled && (
-                          <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
-                            (ปิดไม่ให้กรอก เนื่องจากระบุข้าวหรือกับข้าวแล้ว)
-                          </span>
-                        )}
-                      </label>
-                      {singleDishSuggestions.length > 0 && !isSetMealFilled && (
-                        <span className="text-[10px] text-orange-600 flex items-center gap-0.5">
-                          <Sparkles className="w-3 h-3" />
-                          ในคลัง: {singleDishSuggestions.length} รายการ
-                        </span>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      placeholder={isSetMealFilled ? "ปิดไม่ให้กรอก (เนื่องจากระบุข้าวหรือกับข้าวแล้ว)" : "เช่น ข้าวมันไก่ตอน, ก๋วยเตี๋ยวหมูสับ..."}
-                      value={editSingleDish}
-                      disabled={isSetMealFilled}
-                      onFocus={() => {
-                        if (!isSetMealFilled) setActiveField('singleDish');
-                      }}
-                      onChange={(e) => {
-                        setEditSingleDish(e.target.value);
-                        if (e.target.value.trim()) {
-                          setEditRice('');
-                          setEditNonSpicy('');
-                          setEditSpicy('');
-                        }
-                      }}
-                      className={`w-full px-3 py-2 text-xs rounded-xl transition-all ${
-                        isSetMealFilled
-                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
-                          : 'bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500'
-                      }`}
-                    />
-                    {singleDishSuggestions.length > 0 && !isSetMealFilled && (
-                      <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-orange-50/50 rounded-xl border border-orange-200/60 max-h-24 overflow-y-auto">
-                        {singleDishSuggestions.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => {
-                              setEditSingleDish(item.menuName);
-                              setEditRice('');
-                              setEditNonSpicy('');
-                              setEditSpicy('');
-                            }}
-                            className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
-                              editSingleDish === item.menuName 
-                                ? 'bg-orange-600 text-white border-orange-600 font-bold' 
-                                : 'bg-white hover:bg-orange-100 hover:border-orange-300 text-slate-700 border-slate-200'
-                            }`}
-                          >
-                            {item.menuName}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  {/* Modal Action Buttons */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRow(editingEntry.date)}
+                      className="px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl border border-rose-200 transition-colors cursor-pointer"
+                    >
+                      ลบเมนูวันนี้
+                    </button>
 
-                  {/* 3. อาหารไม่เผ็ด (เชื่อมต่อกับคลังเมนู) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
-                        3. อาหารไม่เผ็ด
-                        {isSingleDishFilled && (
-                          <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
-                            (ปิดไม่ให้กรอก เนื่องจากระบุอาหารจานเดียวแล้ว)
-                          </span>
-                        )}
-                      </label>
-                      {nonSpicySuggestions.length > 0 && !isSingleDishFilled && (
-                        <span className="text-[10px] text-emerald-600 flex items-center gap-0.5">
-                          <Sparkles className="w-3 h-3" />
-                          ในคลัง: {nonSpicySuggestions.length} รายการ
-                        </span>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      placeholder={isSingleDishFilled ? "ปิดไม่ให้กรอก (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "เช่น ต้มจืดเต้าหู้หมูสับ, ไข่พะโล้..."}
-                      value={editNonSpicy}
-                      onFocus={() => {
-                        if (!isSingleDishFilled) setActiveField('nonSpicy');
-                      }}
-                      disabled={isSingleDishFilled}
-                      onChange={(e) => {
-                        setEditNonSpicy(e.target.value);
-                        if (e.target.value.trim()) setEditSingleDish('');
-                      }}
-                      className={`w-full px-3 py-2 text-xs rounded-xl transition-all ${
-                        isSingleDishFilled
-                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
-                          : 'bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500'
-                      }`}
-                    />
-                    {nonSpicySuggestions.length > 0 && !isSingleDishFilled && (
-                      <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-emerald-50/50 rounded-xl border border-emerald-200/60 max-h-24 overflow-y-auto">
-                        {nonSpicySuggestions.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => {
-                              setEditNonSpicy(item.menuName);
-                              setEditSingleDish('');
-                            }}
-                            className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
-                              editNonSpicy === item.menuName 
-                                ? 'bg-emerald-600 text-white border-emerald-600 font-bold' 
-                                : 'bg-white hover:bg-emerald-100 hover:border-emerald-300 text-slate-700 border-slate-200'
-                            }`}
-                          >
-                            {item.menuName}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 4. อาหารเผ็ด (เชื่อมต่อกับคลังเมนู) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
-                        4. อาหารเผ็ด
-                        {isSingleDishFilled && (
-                          <span className="text-[10px] text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200 font-semibold ml-1">
-                            (ปิดไม่ให้กรอก เนื่องจากระบุอาหารจานเดียวแล้ว)
-                          </span>
-                        )}
-                      </label>
-                      {spicySuggestions.length > 0 && !isSingleDishFilled && (
-                        <span className="text-[10px] text-rose-600 flex items-center gap-0.5">
-                          <Sparkles className="w-3 h-3" />
-                          ในคลัง: {spicySuggestions.length} รายการ
-                        </span>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      placeholder={isSingleDishFilled ? "ปิดไม่ให้กรอก (เนื่องจากระบุอาหารจานเดียวแล้ว)" : "เช่น ผัดกะเพราหมูสับ, แกงส้มชะอมกุ้ง..."}
-                      value={editSpicy}
-                      onFocus={() => {
-                        if (!isSingleDishFilled) setActiveField('spicy');
-                      }}
-                      disabled={isSingleDishFilled}
-                      onChange={(e) => {
-                        setEditSpicy(e.target.value);
-                        if (e.target.value.trim()) setEditSingleDish('');
-                      }}
-                      className={`w-full px-3 py-2 text-xs rounded-xl transition-all ${
-                        isSingleDishFilled
-                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed select-none'
-                          : 'bg-slate-50 border border-slate-300 focus:bg-white focus:ring-2 focus:ring-orange-500'
-                      }`}
-                    />
-                    {spicySuggestions.length > 0 && !isSingleDishFilled && (
-                      <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-rose-50/50 rounded-xl border border-rose-200/60 max-h-24 overflow-y-auto">
-                        {spicySuggestions.map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => {
-                              setEditSpicy(item.menuName);
-                              setEditSingleDish('');
-                            }}
-                            className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
-                              editSpicy === item.menuName 
-                                ? 'bg-rose-600 text-white border-rose-600 font-bold' 
-                                : 'bg-white hover:bg-rose-100 hover:border-rose-300 text-slate-700 border-slate-200'
-                            }`}
-                          >
-                            {item.menuName}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-              {/* 5. ผลไม้-ของหวาน (เชื่อมต่อกับคลังเมนู) */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-bold text-slate-700">
-                    5. ผลไม้-ของหวาน
-                  </label>
-                  {dessertSuggestions.length > 0 && (
-                    <span className="text-[10px] text-teal-600 flex items-center gap-0.5">
-                      <Sparkles className="w-3 h-3" />
-                      ในคลัง: {dessertSuggestions.length} รายการ
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="text"
-                  placeholder="เช่น ส้มเขียวหวาน, บัวลอยเผือก..."
-                  value={editDessert}
-                  onFocus={() => setActiveField('dessert')}
-                  onChange={(e) => setEditDessert(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500"
-                />
-                {dessertSuggestions.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5 p-1.5 bg-teal-50/50 rounded-xl border border-teal-200/60 max-h-24 overflow-y-auto">
-                    {dessertSuggestions.map((item) => (
+                    <div className="flex items-center gap-2">
                       <button
-                        key={item.id}
                         type="button"
-                        onClick={() => setEditDessert(item.menuName)}
-                        className={`px-2 py-0.5 text-[11px] rounded-lg border transition-colors cursor-pointer ${
-                          editDessert === item.menuName 
-                            ? 'bg-teal-600 text-white border-teal-600 font-bold' 
-                            : 'bg-white hover:bg-teal-100 hover:border-teal-300 text-slate-700 border-slate-200'
-                        }`}
+                        onClick={() => setEditingEntry(null)}
+                        className="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
                       >
-                        {item.menuName}
+                        ยกเลิก
                       </button>
-                    ))}
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>บันทึกการแก้ไข</span>
+                      </button>
+                    </div>
                   </div>
-                )}
-              </div>
-
-              {/* 6. หมายเหตุ */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  6. หมายเหตุ
-                </label>
-                <input
-                  type="text"
-                  placeholder="หมายเหตุเพิ่มเติม..."
-                  value={editNote}
-                  onChange={(e) => setEditNote(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:ring-2 focus:ring-orange-500"
-                />
-              </div>
-
-              {/* Modal Action Buttons */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleDeleteRow(editingEntry.date)}
-                  className="px-3 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-xl border border-rose-200 transition-colors cursor-pointer"
-                >
-                  ลบเมนูวันนี้
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditingEntry(null)}
-                    className="px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Save className="w-3.5 h-3.5" />
-                    <span>บันทึกการแก้ไข</span>
-                  </button>
-                </div>
-              </div>
-            </form>
+                </form>
               );
             })()}
           </div>
