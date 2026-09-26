@@ -235,39 +235,36 @@ export function queueDirectGasSync(gasUrl: string, payload: any, delayMs: number
 
 /**
  * ดึงข้อมูลที่ซิงค์ส่วนกลางจาก Server (ใช้ร่วมกันทุกเครื่อง ทุกเบราว์เซอร์ ทุกอีเมล)
- * พร้อมระบบ Fallback ดึงตรงจาก Google Sheets อัตโนมัติหากฝั่งเซิร์ฟเวอร์ยังไม่มีข้อมูล
+ * ข้อมูลบนเซิร์ฟเวอร์เป็นแหล่งข้อมูลหลักที่แม่นยำ ไม่ดึงทับด้วยข้อมูลเก่าจากชีต
  */
-export async function fetchServerData(gasUrlOverride?: string) {
+export async function fetchServerData(_gasUrlOverride?: string) {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     const res = await fetch('/api/data', { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
-      if (data && data.success && Array.isArray(data.dailyMenus) && data.dailyMenus.length > 0) {
+      if (data && data.success) {
+        // ทำความสะอาดและป้องกันวันที่ซ้ำซ้อนอย่างเด็ดขาด
+        if (Array.isArray(data.dailyMenus)) {
+          const map = new Map<string, DailyMenuEntry>();
+          data.dailyMenus.forEach((m: DailyMenuEntry) => {
+            if (m && m.date) {
+              const cleanDate = String(m.date).trim().slice(0, 10);
+              if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+                map.set(cleanDate, { ...m, date: cleanDate });
+              }
+            }
+          });
+          data.dailyMenus = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+        }
         return data;
       }
     }
   } catch (err) {
-    // Server not available (e.g. running on Cloudflare Pages)
-  }
-
-  // Fallback: ดึงตรงจาก Google Apps Script ทันที เพื่อรับประกันว่าทุกเครื่องได้ข้อมูลชุดเดียวกัน 100%
-  try {
-    const targetUrl = gasUrlOverride || DEFAULT_GAS_URL;
-    const gasData = await callGasGet(targetUrl, { action: 'getAllData' });
-    if (gasData && gasData.status === 'success') {
-      return {
-        success: true,
-        settings: gasData.settings,
-        menuBank: gasData.menuBank,
-        dailyMenus: gasData.dailyMenu,
-        lastUpdated: new Date().toISOString()
-      };
-    }
-  } catch (gasErr) {
-    console.warn('Direct GAS sync warning:', gasErr);
+    // Local server error or network issue
+    console.warn('Local server fetch warning:', err);
   }
 
   return null;
@@ -283,15 +280,28 @@ export async function saveServerData(payload: {
   dailyMenus?: DailyMenuEntry[];
   syncToGas?: boolean;
 }) {
+  // ทำความสะอาดและป้องกันข้อมูลซ้ำซ้อนก่อนส่ง
+  if (Array.isArray(payload.dailyMenus)) {
+    const map = new Map<string, DailyMenuEntry>();
+    payload.dailyMenus.forEach((m) => {
+      if (m && m.date) {
+        const cleanDate = String(m.date).trim().slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+          map.set(cleanDate, { ...m, date: cleanDate });
+        }
+      }
+    });
+    payload.dailyMenus = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
   // 1. กระจายข้อมูลข้ามแท็บในเครื่องเดียวกันทันทีใน 0 มิลลิวินาที
   broadcastLocalChange('ALL', payload);
 
-  let hasServer = false;
   let serverResult: any = null;
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
     const res = await fetch('/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -301,16 +311,9 @@ export async function saveServerData(payload: {
     clearTimeout(timeoutId);
     if (res.ok) {
       serverResult = await res.json();
-      hasServer = true;
     }
   } catch (err) {
-    // No backend server available (e.g. Cloudflare Pages)
-  }
-
-  // หากรันบน Cloudflare Pages ที่ไม่มี Node.js server ให้ส่งตรงไป Google Sheets แบบ Debounce
-  if (!hasServer && payload.syncToGas !== false) {
-    const gasUrl = payload.settings?.gasWebAppUrl || DEFAULT_GAS_URL;
-    queueDirectGasSync(gasUrl, payload, 600);
+    console.warn('Server save warning:', err);
   }
 
   return serverResult || { success: true };

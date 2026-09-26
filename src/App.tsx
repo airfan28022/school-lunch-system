@@ -374,10 +374,25 @@ export default function App() {
       }
     }
 
-    // Compute updated menus synchronously so saveServerData gets full populated list
-    const map = new Map(dailyMenus.map((m) => [m.date, m]));
-    entries.forEach((e) => map.set(e.date, e));
-    const updated = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+    // กำหนดกลุ่มเดือนที่มีการสุ่มหรือบันทึกใหม่
+    // แทนที่รายการของเดือนนั้นทั้งหมด เพื่อล้างข้อมูลวันที่ตกค้าง วันที่ซ้ำ หรือข้อมูลเก่าให้สะอาดหมดจด
+    const incomingMonthPrefixes = new Set(entries.map((e) => e.date.slice(0, 7)));
+
+    // เก็บรายการของเดือนอื่นๆ ไว้ตามเดิม
+    const otherMonthsEntries = dailyMenus.filter(
+      (m) => !incomingMonthPrefixes.has(m.date.slice(0, 7))
+    );
+
+    // ทำความสะอาดและป้องกันวันที่ซ้ำซ้อนในกลุ่มข้อมูลที่ส่งเข้ามา
+    const newMonthMap = new Map<string, DailyMenuEntry>();
+    entries.forEach((e) => {
+      const cleanDate = e.date.trim().slice(0, 10);
+      newMonthMap.set(cleanDate, { ...e, date: cleanDate });
+    });
+
+    const updated = [...otherMonthsEntries, ...Array.from(newMonthMap.values())].sort((a, b) =>
+      a.date.localeCompare(b.date)
+    );
 
     setDailyMenus(updated);
     try {

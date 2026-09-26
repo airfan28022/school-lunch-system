@@ -475,7 +475,7 @@ function getMenuBankData(ss) {
 function getDailyMenuData(ss, monthFilter, dateFilter) {
   const sheet = ss.getSheetByName('DailyMenu');
   const values = sheet.getDataRange().getValues();
-  const list = [];
+  const dateMap = {};
 
   for (let i = 1; i < values.length; i++) {
     const row = values[i];
@@ -486,7 +486,7 @@ function getDailyMenuData(ss, monthFilter, dateFilter) {
     if (dateVal instanceof Date) {
       dateStr = Utilities.formatDate(dateVal, Session.getScriptTimeZone(), 'yyyy-MM-dd');
     } else {
-      dateStr = String(dateVal).trim();
+      dateStr = String(dateVal).trim().slice(0, 10);
     }
 
     if (monthFilter && !dateStr.startsWith(monthFilter)) continue;
@@ -499,7 +499,8 @@ function getDailyMenuData(ss, monthFilter, dateFilter) {
       if (row[6]) photos = [{ url: String(row[6]), name: 'photo' }];
     }
 
-    list.push({
+    // จัดเก็บแบบ 1 วันที่ต่อ 1 รายการ ป้องกันแถววันที่ซ้ำซ้อนในชีต
+    dateMap[dateStr] = {
       date: dateStr,
       rice: row[1] || '',
       singleDish: row[2] || '',
@@ -511,9 +512,10 @@ function getDailyMenuData(ss, monthFilter, dateFilter) {
       department: row[8] || '',
       updatedBy: row[9] || '',
       lastModified: row[10] || ''
-    });
+    };
   }
 
+  const list = Object.keys(dateMap).map(function(k) { return dateMap[k]; });
   list.sort(function(a, b) {
     return a.date.localeCompare(b.date);
   });
@@ -669,27 +671,44 @@ function handleSyncAll(ss, payload) {
 
   // 3. High-speed Batch Sync DailyMenu (1 single write operation instead of loop)
   const dailyList = payload.dailyMenus || payload.dailyMenu;
-  if (dailyList && Array.isArray(dailyList) && dailyList.length > 0) {
+  if (dailyList && Array.isArray(dailyList)) {
     const sheetDM = ss.getSheetByName('DailyMenu');
     if (sheetDM) {
-      const rows = dailyList.map(item => [
-        item.date,
-        item.rice || '',
-        item.singleDish || '',
-        item.spicy || '',
-        item.nonSpicy || '',
-        item.dessert || '',
-        JSON.stringify(item.photos || []),
-        item.note || '',
-        item.department || '',
-        item.updatedBy || 'ผู้จัดการระบบ',
-        now
-      ]);
       const lastRow = sheetDM.getLastRow();
       if (lastRow > 1) {
         sheetDM.getRange(2, 1, lastRow - 1, 11).clearContent();
       }
-      sheetDM.getRange(2, 1, rows.length, 11).setValues(rows);
+      if (dailyList.length > 0) {
+        // ป้องกันและตัดวันที่ซ้ำซ้อนในชีตอย่างเด็ดขาด
+        const dateMap = {};
+        dailyList.forEach(function(item) {
+          if (item && item.date) {
+            const clean = String(item.date).trim().slice(0, 10);
+            if (!dateMap[clean]) {
+              dateMap[clean] = item;
+            }
+          }
+        });
+        const cleanList = Object.keys(dateMap).map(function(k) { return dateMap[k]; });
+        cleanList.sort(function(a, b) { return a.date.localeCompare(b.date); });
+
+        const rows = cleanList.map(item => [
+          item.date,
+          item.rice || '',
+          item.singleDish || '',
+          item.spicy || '',
+          item.nonSpicy || '',
+          item.dessert || '',
+          JSON.stringify(item.photos || []),
+          item.note || '',
+          item.department || '',
+          item.updatedBy || 'ผู้จัดการระบบ',
+          now
+        ]);
+        if (rows.length > 0) {
+          sheetDM.getRange(2, 1, rows.length, 11).setValues(rows);
+        }
+      }
     }
   }
 

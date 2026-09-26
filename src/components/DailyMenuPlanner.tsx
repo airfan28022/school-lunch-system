@@ -162,7 +162,8 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
    */
   const calculateNextSchoolDay = (currentDateStr: string): string => {
     const parts = currentDateStr.split('-').map(Number);
-    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    const y = parts[0] > 2400 ? parts[0] - 543 : parts[0];
+    const d = new Date(y, parts[1] - 1, parts[2], 12, 0, 0);
     
     // Add 1 day
     d.setDate(d.getDate() + 1);
@@ -183,19 +184,21 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   const formatThaiDisplay = (dateStr: string) => {
     if (!dateStr) return '';
     const parts = dateStr.split('-').map(Number);
-    const d = new Date(parts[0], parts[1] - 1, parts[2]);
-    return `วัน${THAI_DAY_NAMES[d.getDay()]}ที่ ${d.getDate()} ${THAI_MONTH_SHORT[d.getMonth()]} ${d.getFullYear() + 543}`;
+    const y = parts[0] > 2400 ? parts[0] - 543 : parts[0];
+    const d = new Date(y, parts[1] - 1, parts[2], 12, 0, 0);
+    return `วัน${THAI_DAY_NAMES[d.getDay()]}ที่ ${d.getDate()} ${THAI_MONTH_SHORT[d.getMonth()]} ${y + 543}`;
   };
 
   // Format short date like PrintReport (e.g. จ. 1/9/69)
   const formatShortDate = (dateStr: string): string => {
     if (!dateStr) return '';
     const parts = dateStr.split('-').map(Number);
-    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    const y = parts[0] > 2400 ? parts[0] - 543 : parts[0];
+    const d = new Date(y, parts[1] - 1, parts[2], 12, 0, 0);
     const dayShort = THAI_DAY_SHORT[d.getDay()];
     const dateNum = d.getDate();
     const monthNum = d.getMonth() + 1;
-    const yearShort = String(d.getFullYear() + 543).slice(-2);
+    const yearShort = String(y + 543).slice(-2);
     return `${dayShort} ${dateNum}/${monthNum}/${yearShort}`;
   };
 
@@ -502,11 +505,25 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
   const hasSetMeal = Boolean(rice.trim() || nonSpicy.trim() || spicy.trim());
   const hasSingleDish = Boolean(singleDish.trim());
 
+  // Unique and sorted saved calendar menus
+  const uniqueCalendarEntries = useMemo(() => {
+    const map = new Map<string, DailyMenuEntry>();
+    dailyMenus.forEach((m) => {
+      if (m && m.date) {
+        const cleanDate = m.date.trim().slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+          map.set(cleanDate, { ...m, date: cleanDate });
+        }
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }, [dailyMenus]);
+
   // Filtered entries for saved calendar menus based on user's search query (for quick menu copying)
   const filteredCalendarEntries = useMemo(() => {
-    if (!calendarSearchQuery.trim()) return dailyMenus;
+    if (!calendarSearchQuery.trim()) return uniqueCalendarEntries;
     const q = calendarSearchQuery.toLowerCase().trim();
-    return dailyMenus.filter((entry) => {
+    return uniqueCalendarEntries.filter((entry) => {
       const meal = formatMealList(entry).toLowerCase();
       const thaiDate = formatThaiDisplay(entry.date).toLowerCase();
       const shortDate = formatShortDate(entry.date).toLowerCase();
@@ -530,7 +547,7 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
         ds.includes(q)
       );
     });
-  }, [dailyMenus, calendarSearchQuery]);
+  }, [uniqueCalendarEntries, calendarSearchQuery]);
 
   // Selection helpers for batch selection in the saved menus table
   const isAllSelected = useMemo(() => {
@@ -1310,7 +1327,8 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
                   const isCurrent = entry.date === selectedDate;
                   const isSelected = selectedDates.includes(entry.date);
                   const parts = entry.date.split('-').map(Number);
-                  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                  const entryY = parts[0] > 2400 ? parts[0] - 543 : parts[0];
+                  const d = new Date(entryY, parts[1] - 1, parts[2], 12, 0, 0);
                   const isMonday = d.getDay() === 1;
                   const mealString = formatMealList(entry);
 

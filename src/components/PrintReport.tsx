@@ -138,8 +138,18 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   const monthKey = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
 
   // Filter entries belonging to this month, ALWAYS sorted from day 1 to day 31 (Requirement 1.5)
+  // Deduplicate strictly by date so no duplicate days can ever exist in the report table
   const monthEntries = useMemo(() => {
-    let filtered = dailyMenus.filter((item) => item.date.startsWith(monthKey));
+    const map = new Map<string, DailyMenuEntry>();
+    dailyMenus.forEach((item) => {
+      if (item && item.date) {
+        const cleanDate = item.date.trim().slice(0, 10);
+        if (cleanDate.startsWith(monthKey) && /^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+          map.set(cleanDate, { ...item, date: cleanDate });
+        }
+      }
+    });
+    let filtered = Array.from(map.values());
 
     if (searchFilter.trim()) {
       const q = searchFilter.toLowerCase();
@@ -166,11 +176,12 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   const formatShortDate = (dateStr: string): string => {
     if (!dateStr) return '';
     const parts = dateStr.split('-').map(Number);
-    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    const y = parts[0] > 2400 ? parts[0] - 543 : parts[0];
+    const d = new Date(y, parts[1] - 1, parts[2], 12, 0, 0);
     const dayShort = THAI_DAY_SHORT[d.getDay()];
     const dateNum = d.getDate();
     const monthNum = d.getMonth() + 1;
-    const yearShort = String(d.getFullYear() + 543).slice(-2);
+    const yearShort = String(y + 543).slice(-2);
     return `${dayShort} ${dateNum}/${monthNum}/${yearShort}`;
   };
 
@@ -605,7 +616,8 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               {monthEntries.map((entry) => {
                 const shortDate = formatShortDate(entry.date);
                 const parts = entry.date.split('-').map(Number);
-                const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                const entryY = parts[0] > 2400 ? parts[0] - 543 : parts[0];
+                const d = new Date(entryY, parts[1] - 1, parts[2], 12, 0, 0);
                 const isMonday = d.getDay() === 1;
                 const mealString = formatMealList(entry);
 

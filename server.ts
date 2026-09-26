@@ -87,13 +87,30 @@ function initStore(): StoreData {
   return initialStore;
 }
 
+function sanitizeDailyMenus(list: any[]): any[] {
+  if (!Array.isArray(list)) return [];
+  const map = new Map<string, any>();
+  list.forEach((item) => {
+    if (!item || !item.date) return;
+    const cleanDate = String(item.date).trim().slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+      map.set(cleanDate, { ...item, date: cleanDate });
+    }
+  });
+  return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function readStore(): StoreData {
   try {
     if (!fs.existsSync(STORE_PATH)) {
       return initStore();
     }
     const raw = fs.readFileSync(STORE_PATH, 'utf-8');
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (parsed.dailyMenus) {
+      parsed.dailyMenus = sanitizeDailyMenus(parsed.dailyMenus);
+    }
+    return parsed;
   } catch (err) {
     console.error('readStore error:', err);
     return initStore();
@@ -103,6 +120,9 @@ function readStore(): StoreData {
 function writeStore(data: StoreData): void {
   try {
     data.lastUpdated = new Date().toISOString();
+    if (data.dailyMenus) {
+      data.dailyMenus = sanitizeDailyMenus(data.dailyMenus);
+    }
     fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
     console.error('writeStore error:', err);
@@ -117,7 +137,7 @@ async function callGas(url: string, payload: any): Promise<any> {
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 20000);
+  const timeoutId = setTimeout(() => controller.abort(), 35000);
 
   try {
     const res = await fetch(cleanUrl, {
@@ -180,14 +200,12 @@ async function syncFromGas(gasUrl?: string): Promise<boolean> {
         changed = true;
       }
       if (Array.isArray(data.dailyMenu) && data.dailyMenu.length > 0) {
-        const map = new Map((current.dailyMenus || []).map((m: any) => [m.date, m]));
-        data.dailyMenu.forEach((m: any) => {
-          if (!map.has(m.date)) {
-            map.set(m.date, m);
-            changed = true;
-          }
-        });
-        current.dailyMenus = Array.from(map.values()).sort((a: any, b: any) => a.date.localeCompare(b.date));
+        // เฉพาะกรณีที่ store ยังไม่มีข้อมูลรายวันเลย (เริ่มต้นระบบใหม่) จึงจะดึงจาก Google Sheets
+        // ป้องกันการกู้คืนเมนูเก่าที่ผู้ใช้เคยลบหรือสุ่มใหม่ทับ
+        if (!current.dailyMenus || current.dailyMenus.length === 0) {
+          current.dailyMenus = sanitizeDailyMenus(data.dailyMenu);
+          changed = true;
+        }
       }
       if (changed) {
         current.lastUpdated = new Date().toISOString();
@@ -454,7 +472,7 @@ async function startServer() {
           current.menuBank = data.menuBank;
         }
         if (Array.isArray(data.dailyMenu) && data.dailyMenu.length > 0) {
-          current.dailyMenus = data.dailyMenu;
+          current.dailyMenus = sanitizeDailyMenus(data.dailyMenu);
         }
 
         writeStore(current);

@@ -22,6 +22,9 @@ export function generateMonthlyMenu(
   menuBank: MenuItem[],
   dailyMenus: DailyMenuEntry[] = []
 ): DailyMenuEntry[] {
+  // รองรับทั้งปี ค.ศ. (เช่น 2026) และปี พ.ศ. (เช่น 2569) ป้องกันการคำนวณวันในสัปดาห์คลาดเคลื่อน
+  const normalizedYear = randomYear > 2400 ? randomYear - 543 : randomYear;
+
   const isDessertName = (name: string) => {
     const n = name.toLowerCase();
     return (
@@ -63,7 +66,7 @@ export function generateMonthlyMenu(
     dessertBank.length > 0 ? dessertBank : INITIAL_MENU_BANK.filter((m) => m.category === 'ของหวาน');
 
   // ดึงข้อมูลเมนูของ "เดือนที่แล้ว" เพื่อนำมาคำนวณความหลากหลาย ให้แตกต่างจากเดือนก่อน
-  const prevYear = randomMonth === 1 ? randomYear - 1 : randomYear;
+  const prevYear = randomMonth === 1 ? normalizedYear - 1 : normalizedYear;
   const prevMonth = randomMonth === 1 ? 12 : randomMonth - 1;
   const prevMonthPrefix = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
   const prevMonthEntries = dailyMenus.filter((m) => m.date.startsWith(prevMonthPrefix));
@@ -73,7 +76,8 @@ export function generateMonthlyMenu(
 
   prevMonthEntries.forEach((entry) => {
     const parts = entry.date.split('-').map(Number);
-    const dayOfWeek = new Date(parts[0], parts[1] - 1, parts[2]).getDay();
+    const entryY = parts[0] > 2400 ? parts[0] - 543 : parts[0];
+    const dayOfWeek = new Date(entryY, parts[1] - 1, parts[2], 12, 0, 0).getDay();
     if (dayOfWeek === 3 && entry.singleDish) {
       prevWedSingleDishes.add(entry.singleDish.trim());
     }
@@ -86,12 +90,13 @@ export function generateMonthlyMenu(
   });
 
   // รวบรวมวันทำการเรียน (จันทร์-ศุกร์) ทั้งหมดในเดือนที่เลือก แยกเป็นสัปดาห์
-  const daysInMonth = new Date(randomYear, randomMonth, 0).getDate();
+  const daysInMonth = new Date(normalizedYear, randomMonth, 0).getDate();
   const schoolDaysByWeek: { weekNumber: number; dates: Date[] }[] = [];
 
   let currentWeek: Date[] = [];
   for (let day = 1; day <= daysInMonth; day++) {
-    const d = new Date(randomYear, randomMonth - 1, day);
+    // ใช้เวลาเที่ยงวัน (12:00:00) ป้องกันการขยับของวันจาก Timezone / Daylight saving อย่างเด็ดขาด
+    const d = new Date(normalizedYear, randomMonth - 1, day, 12, 0, 0);
     const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
 
     // เฉพาะวันจันทร์ (1) ถึง วันศุกร์ (5)
