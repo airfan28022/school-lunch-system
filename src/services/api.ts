@@ -237,10 +237,11 @@ export function queueDirectGasSync(gasUrl: string, payload: any, delayMs: number
  * ดึงข้อมูลที่ซิงค์ส่วนกลางจาก Server (ใช้ร่วมกันทุกเครื่อง ทุกเบราว์เซอร์ ทุกอีเมล)
  * ข้อมูลบนเซิร์ฟเวอร์เป็นแหล่งข้อมูลหลักที่แม่นยำ ไม่ดึงทับด้วยข้อมูลเก่าจากชีต
  */
-export async function fetchServerData(_gasUrlOverride?: string) {
+export async function fetchServerData(gasUrlOverride?: string) {
+  // 1. ลองดึงจากเซิร์ฟเวอร์ Express ภายใน (/api/data)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
     const res = await fetch('/api/data', { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
@@ -262,9 +263,49 @@ export async function fetchServerData(_gasUrlOverride?: string) {
         return data;
       }
     }
-  } catch (err) {
-    // Local server error or network issue
-    console.warn('Local server fetch warning:', err);
+  } catch {
+    // โหมดสถิต เช่น Cloudflare Pages จะไม่มี /api/data
+  }
+
+  // 2. ลองดึงไฟล์ static store.json (กรณี Deploy สถิตบน Cloudflare Pages / Vercel)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch('/data/store.json', { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && (data.menuBank || data.settings || data.dailyMenus)) {
+        return {
+          success: true,
+          settings: data.settings,
+          menuBank: data.menuBank,
+          dailyMenus: data.dailyMenus,
+          lastUpdated: data.lastUpdated
+        };
+      }
+    }
+  } catch {
+    // ไปยังตัวเลือกถัดไป
+  }
+
+  // 3. ดึงโดยตรงจาก Google Apps Script Web App (คลาวด์สด)
+  const targetGasUrl = gasUrlOverride || DEFAULT_GAS_URL;
+  if (targetGasUrl) {
+    try {
+      const gasData = await callGasGet(targetGasUrl, { action: 'getAllData' });
+      if (gasData && gasData.status === 'success') {
+        return {
+          success: true,
+          settings: gasData.settings,
+          menuBank: gasData.menuBank,
+          dailyMenus: gasData.dailyMenu || gasData.dailyMenus,
+          lastUpdated: new Date().toISOString()
+        };
+      }
+    } catch (gasErr) {
+      console.warn('Direct GAS sync fallback notice:', gasErr);
+    }
   }
 
   return null;
@@ -273,6 +314,7 @@ export async function fetchServerData(_gasUrlOverride?: string) {
 /**
  * บันทึกข้อมูลขึ้น Server เพื่อซิงค์ไปทุกเครื่อง ทุกอุปกรณ์ทันที
  * ความเร็วสูงด้วย BroadcastChannel (0ms ข้ามแท็บ) และ Debounced Cloud Sync
+ * รองรับทั้งโหมด Node Server ปกติ และโหมด Cloudflare Pages (สถิต)
  */
 export async function saveServerData(payload: {
   settings?: SchoolSettings;
@@ -298,10 +340,11 @@ export async function saveServerData(payload: {
   broadcastLocalChange('ALL', payload);
 
   let serverResult: any = null;
+  let serverSaved = false;
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     const res = await fetch('/api/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -311,12 +354,19 @@ export async function saveServerData(payload: {
     clearTimeout(timeoutId);
     if (res.ok) {
       serverResult = await res.json();
+      serverSaved = true;
     }
   } catch (err) {
-    console.warn('Server save warning:', err);
+    // Cloudflare Pages / Static host
   }
 
-  return serverResult || { success: true };
+  // หากไม่มี Node backend (เช่น Cloudflare Pages) ให้ส่งข้อมูลไปยัง Google Apps Script Web App โดยตรง
+  const gasUrl = payload.settings?.gasWebAppUrl || DEFAULT_GAS_URL;
+  if (!serverSaved && gasUrl && payload.syncToGas !== false) {
+    queueDirectGasSync(gasUrl, payload, 800);
+  }
+
+  return serverResult || { success: true, lastUpdated: new Date().toISOString() };
 }
 
 /**
