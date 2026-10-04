@@ -71,11 +71,6 @@ export const Header: React.FC<HeaderProps> = ({
 
   const mainNavItems = [
     {
-      id: 'repository' as const,
-      label: 'คลังเมนู',
-      icon: UtensilsCrossed
-    },
-    {
       id: 'planner' as const,
       label: 'จัดการเมนูประจำวัน',
       icon: CalendarDays
@@ -153,15 +148,16 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 id="btn-nav-settings"
                 onClick={() => onTabChange('settings')}
-                title="ตั้งค่าระบบ"
+                title="ตั้งค่าระบบ (ข้อมูลโรงเรียนและคลังเมนูอาหาร)"
                 aria-label="ตั้งค่าระบบ"
-                className={`p-2 rounded-xl transition-all cursor-pointer flex items-center justify-center shadow-2xs ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs font-semibold text-xs ${
                   activeTab === 'settings'
                     ? 'bg-slate-900 text-white shadow-xs'
                     : 'bg-white/90 hover:bg-white text-slate-800 hover:text-amber-900 border border-amber-400/80'
                 }`}
               >
-                <Settings className="w-4.5 h-4.5" />
+                <Settings className={`w-4 h-4 ${activeTab === 'settings' ? 'text-amber-400 animate-spin-slow' : 'text-slate-700'}`} />
+                <span className="hidden sm:inline font-bold">ตั้งค่า</span>
               </button>
 
               {/* Mobile menu toggle */}
@@ -233,23 +229,6 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             );
           })}
-          <button
-            id="mobile-nav-tab-settings"
-            onClick={() => {
-              onTabChange('settings');
-              setMobileMenuOpen(false);
-            }}
-            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm font-bold transition-colors ${
-              activeTab === 'settings'
-                ? 'bg-amber-100 text-amber-950 border border-amber-300'
-                : 'text-slate-700 hover:bg-slate-50'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <Settings className={`w-5 h-5 ${activeTab === 'settings' ? 'text-amber-800' : 'text-slate-500'}`} />
-              <span>ตั้งค่าระบบ</span>
-            </div>
-          </button>
         </div>
       )}
     </header>

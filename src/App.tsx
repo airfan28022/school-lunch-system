@@ -12,7 +12,6 @@ import {
   INITIAL_DAILY_MENUS 
 } from './data/initialData';
 import { Header } from './components/Header';
-import { MenuRepository } from './components/MenuRepository';
 import { DailyMenuPlanner } from './components/DailyMenuPlanner';
 import { PrintReport } from './components/PrintReport';
 import { SettingsModal } from './components/SettingsModal';
@@ -721,16 +720,6 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'repository' && (
-          <MenuRepository
-            menuBank={menuBank}
-            onAddMenuItem={handleAddMenuItem}
-            onUpdateMenuItem={handleUpdateMenuItem}
-            onDeleteMenuItem={handleDeleteMenuItem}
-            onSeedPresets={handleSeedPresets}
-          />
-        )}
-
         {activeTab === 'report' && (
           <PrintReport
             dailyMenus={dailyMenus}
@@ -747,7 +736,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'settings' && (
+        {(activeTab === 'settings' || activeTab === 'repository') && (
           <SettingsModal
             settings={settings}
             onSaveSettings={handleSaveSettings}
@@ -755,6 +744,12 @@ export default function App() {
             onTestGasConnection={handleTestGasConnection}
             onSyncGas={handleSyncGas}
             showToast={showToast}
+            menuBank={menuBank}
+            onAddMenuItem={handleAddMenuItem}
+            onUpdateMenuItem={handleUpdateMenuItem}
+            onDeleteMenuItem={handleDeleteMenuItem}
+            onSeedPresets={handleSeedPresets}
+            defaultSubTab="menu"
           />
         )}
       </main>
