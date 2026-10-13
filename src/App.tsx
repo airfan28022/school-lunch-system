@@ -12,8 +12,11 @@ import {
   INITIAL_DAILY_MENUS 
 } from './data/initialData';
 import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
+import { MobileBottomNav } from './components/MobileBottomNav';
 import { DailyMenuPlanner } from './components/DailyMenuPlanner';
 import { PrintReport } from './components/PrintReport';
+import { TaxManagement } from './components/TaxManagement';
 import { SettingsModal } from './components/SettingsModal';
 import { LightboxModal } from './components/LightboxModal';
 import { NotificationToast } from './components/NotificationToast';
@@ -36,8 +39,8 @@ const STORAGE_KEY_MENU_BANK = 'school_lunch_menu_bank_v1';
 const STORAGE_KEY_DAILY_MENUS = 'school_lunch_daily_menus_v2';
 
 export default function App() {
-  // Navigation active tab
-  const [activeTab, setActiveTab] = useState<'planner' | 'repository' | 'report' | 'settings'>('planner');
+  // Navigation active tab - Default to 'tax' (จัดการภาษี) as requested
+  const [activeTab, setActiveTab] = useState<'tax' | 'planner' | 'repository' | 'report' | 'settings'>('tax');
 
   // Real-time synchronization state
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -688,7 +691,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
-      {/* Header with live clock & navigation */}
+      {/* Header with live clock & top controls */}
       <Header
         settings={settings}
         activeTab={activeTab}
@@ -698,61 +701,83 @@ export default function App() {
         onManualSync={handleManualSync}
       />
 
-      {/* Main Content View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'planner' && (
-          <DailyMenuPlanner
-            dailyMenus={dailyMenus}
-            menuBank={menuBank}
-            onSaveDailyMenu={handleSaveDailyMenu}
-            onBatchSaveDailyMenus={handleBatchSaveDailyMenus}
-            onDeleteDailyMenu={handleDeleteDailyMenu}
-            onBatchDeleteDailyMenus={handleBatchDeleteDailyMenus}
-            onOpenLightbox={handleOpenLightbox}
-            showToast={showToast}
-            gasWebAppUrl={settings.gasWebAppUrl}
-            onUploadImageToDrive={handleUploadImageToDrive}
-            onNavigateToReport={handleNavigateToReport}
-            onActiveMonthYearChange={(m, y) => {
-              setActiveReportMonth(m);
-              setActiveReportYear(y);
-            }}
-          />
-        )}
+      {/* App Body with Left Sticky Vertical Sidebar & Main Content */}
+      <div className="flex-1 flex flex-col md:flex-row w-full max-w-[1700px] mx-auto">
+        {/* Left Sticky Sidebar arranged vertically */}
+        <Sidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
 
-        {activeTab === 'report' && (
-          <PrintReport
-            dailyMenus={dailyMenus}
-            settings={settings}
-            showToast={showToast}
-            menuBank={menuBank}
-            onSaveDailyMenu={handleSaveDailyMenu}
-            onDeleteDailyMenu={handleDeleteDailyMenu}
-            onBatchDeleteDailyMenus={handleBatchDeleteDailyMenus}
-            onBatchSaveDailyMenus={handleBatchSaveDailyMenus}
-            initialMonth={activeReportMonth}
-            initialYear={activeReportYear}
-            onNavigateToPlanner={handleNavigateToPlanner}
-          />
-        )}
+        {/* Main Content View Container */}
+        <main className="flex-1 min-w-0 px-3 sm:px-6 lg:px-8 py-5 pb-24 md:pb-8">
+          {activeTab === 'tax' && (
+            <TaxManagement
+              settings={settings}
+              showToast={showToast}
+            />
+          )}
 
-        {(activeTab === 'settings' || activeTab === 'repository') && (
-          <SettingsModal
-            settings={settings}
-            onSaveSettings={handleSaveSettings}
-            onUploadLogo={handleUploadLogo}
-            onTestGasConnection={handleTestGasConnection}
-            onSyncGas={handleSyncGas}
-            showToast={showToast}
-            menuBank={menuBank}
-            onAddMenuItem={handleAddMenuItem}
-            onUpdateMenuItem={handleUpdateMenuItem}
-            onDeleteMenuItem={handleDeleteMenuItem}
-            onSeedPresets={handleSeedPresets}
-            defaultSubTab="menu"
-          />
-        )}
-      </main>
+          {activeTab === 'planner' && (
+            <DailyMenuPlanner
+              dailyMenus={dailyMenus}
+              menuBank={menuBank}
+              onSaveDailyMenu={handleSaveDailyMenu}
+              onBatchSaveDailyMenus={handleBatchSaveDailyMenus}
+              onDeleteDailyMenu={handleDeleteDailyMenu}
+              onBatchDeleteDailyMenus={handleBatchDeleteDailyMenus}
+              onOpenLightbox={handleOpenLightbox}
+              showToast={showToast}
+              gasWebAppUrl={settings.gasWebAppUrl}
+              onUploadImageToDrive={handleUploadImageToDrive}
+              onNavigateToReport={handleNavigateToReport}
+              onActiveMonthYearChange={(m, y) => {
+                setActiveReportMonth(m);
+                setActiveReportYear(y);
+              }}
+            />
+          )}
+
+          {activeTab === 'report' && (
+            <PrintReport
+              dailyMenus={dailyMenus}
+              settings={settings}
+              showToast={showToast}
+              menuBank={menuBank}
+              onSaveDailyMenu={handleSaveDailyMenu}
+              onDeleteDailyMenu={handleDeleteDailyMenu}
+              onBatchDeleteDailyMenus={handleBatchDeleteDailyMenus}
+              onBatchSaveDailyMenus={handleBatchSaveDailyMenus}
+              initialMonth={activeReportMonth}
+              initialYear={activeReportYear}
+              onNavigateToPlanner={handleNavigateToPlanner}
+            />
+          )}
+
+          {(activeTab === 'settings' || activeTab === 'repository') && (
+            <SettingsModal
+              settings={settings}
+              onSaveSettings={handleSaveSettings}
+              onUploadLogo={handleUploadLogo}
+              onTestGasConnection={handleTestGasConnection}
+              onSyncGas={handleSyncGas}
+              showToast={showToast}
+              menuBank={menuBank}
+              onAddMenuItem={handleAddMenuItem}
+              onUpdateMenuItem={handleUpdateMenuItem}
+              onDeleteMenuItem={handleDeleteMenuItem}
+              onSeedPresets={handleSeedPresets}
+              defaultSubTab="menu"
+            />
+          )}
+        </main>
+      </div>
+
+      {/* Fixed Bottom Navigation for Mobile Devices */}
+      <MobileBottomNav
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
       {/* Lightbox Modal */}
       {lightboxData && (

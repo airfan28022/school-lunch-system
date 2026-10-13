@@ -103,3 +103,21 @@ export interface ToastNotification {
   type: 'success' | 'info' | 'warning' | 'error';
   timestamp: number;
 }
+
+export interface TaxRecord {
+  id: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  daysCount: number; // จำนวนวัน
+  studentCount: number; // จำนวนนักเรียน
+  ratePerPerson: number; // อัตราค่าอาหารต่อคน (22, 24, 27, 36 หรือกำหนดเอง)
+  totalAmount: number; // ratePerPerson * studentCount * daysCount
+  taxRatePercent: number; // 1%
+  taxAmount: number; // totalAmount * 0.01
+  netAmount: number; // totalAmount - taxAmount
+  isPaid: boolean; // จ่ายภาษีแล้ว หรือยังไม่จ่าย
+  paidAt?: string; // วันที่จ่ายภาษี
+  note?: string; // หมายเหตุ เช่น งวดที่ 1 ประจำเดือน
+  createdAt: string;
+}
+
