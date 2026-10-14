@@ -5,7 +5,7 @@ export const INITIAL_SETTINGS: SchoolSettings = {
   "department": "สังกัดสำนักงานเขตพื้นที่ประถมศึกษากระบี่",
   "managerName": "-",
   "directorName": "-",
-  "logoUrl": "https://lh3.googleusercontent.com/d/1EoUgAwgRdb7RkO8I8oiSzrKRfGlr-41Y",
+  "logoUrl": "/app-logo.png",
   "gasWebAppUrl": "https://script.google.com/macros/s/AKfycbzKYFt1-hn2Qq9bnrsQpG9PMhehuuq6yuaE2e6Tq8ogIB1Ft6EQV4FdyzUkL5RxTKqf/exec"
 };
 

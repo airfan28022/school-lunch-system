@@ -1,0 +1,139 @@
+const fs = require('fs');
+const path = require('path');
+const sharp = require('sharp');
+
+function generateSvg(isPwaSquare = false, withBackground = false) {
+  const bg = withBackground ? '<rect width="512" height="512" fill="#ffffff" />' : '';
+  const pwaBg = isPwaSquare ? '<rect width="512" height="512" rx="112" fill="#ffffff" />' : '';
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="warmOrangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="30%" stop-color="#f97316" />
+      <stop offset="80%" stop-color="#ea580c" />
+      <stop offset="100%" stop-color="#c2410c" />
+    </linearGradient>
+    <linearGradient id="steamGrad" x1="0%" y1="100%" x2="50%" y2="0%">
+      <stop offset="0%" stop-color="#ea580c" />
+      <stop offset="50%" stop-color="#f97316" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+  </defs>
+
+  ${pwaBg || bg}
+
+  <g transform="translate(0, 0)">
+    <!-- 1. Rising Steam (Two stylized ribbons) -->
+    <!-- Left steam wisp -->
+    <path d="M 264 165 C 254 135 244 115 264 88 C 274 74 272 65 260 90 C 248 114 250 140 264 165 Z" fill="url(#steamGrad)" />
+    <!-- Right steam wisp -->
+    <path d="M 285 178 C 298 150 315 125 330 96 C 322 115 310 138 304 156 C 298 170 292 176 285 178 Z" fill="url(#steamGrad)" />
+
+    <!-- 2. The Cloche (Dome Cover) -->
+    <!-- Dome knob stem and cap -->
+    <rect x="244" y="184" width="24" height="15" rx="6" fill="url(#warmOrangeGrad)" />
+    <ellipse cx="256" cy="188" rx="22" ry="11" fill="url(#warmOrangeGrad)" />
+
+    <!-- Dome main body -->
+    <path d="M 136 308 C 136 214 189 194 256 194 C 323 194 376 214 376 308 Z" fill="url(#warmOrangeGrad)" />
+
+    <!-- Crescent white reflection on dome -->
+    <path d="M 158 288 C 160 234 195 214 238 214 C 205 219 172 242 168 288 Z" fill="#ffffff" />
+
+    <!-- 3. Cloche Platter / Base Plate -->
+    <!-- Flat top with gap, beveled rim and curved bottom -->
+    <path d="M 122 316 L 390 316 L 372 344 C 368 348 358 350 348 350 L 164 350 C 154 350 144 348 140 344 Z" fill="url(#warmOrangeGrad)" />
+
+    <!-- 4. Outer Swoosh and Spoon -->
+    <!-- Upper-left circular swoop -->
+    <path d="M 395 148 C 362 90 295 62 230 68 C 142 75 80 145 80 232 C 80 322 145 404 235 426 C 275 436 315 428 352 410 C 318 418 282 416 248 406 C 172 384 122 314 122 232 C 122 165 168 112 232 106 C 285 101 334 122 366 164 C 378 180 388 166 395 148 Z" fill="url(#warmOrangeGrad)" />
+
+    <!-- Lower swoosh leading to spoon -->
+    <path d="M 122 332 C 145 394 205 442 278 444 C 335 445 376 418 405 388 C 375 405 332 416 288 410 C 220 402 165 358 140 310 Z" fill="url(#warmOrangeGrad)" />
+
+    <!-- Spoon head -->
+    <g transform="translate(390, 362) rotate(-35)">
+      <ellipse cx="0" cy="0" rx="44" ry="25" fill="url(#warmOrangeGrad)" />
+    </g>
+  </g>
+</svg>`;
+}
+
+async function buildAllIcons() {
+  const publicDir = path.resolve(__dirname, '..', 'public');
+  const distDir = path.resolve(__dirname, '..', 'dist');
+
+  console.log('Generating vector SVG and raster icons from Warm Orange Culinary Cloche Emblem...');
+
+  const svgContent = generateSvg(false, false);
+  const svgSquareContent = generateSvg(true, true);
+  const svgWithBg = generateSvg(false, true);
+
+  // Write SVGs to public
+  fs.writeFileSync(path.join(publicDir, 'icon.svg'), svgContent, 'utf-8');
+  fs.writeFileSync(path.join(publicDir, 'app-logo.svg'), svgContent, 'utf-8');
+  fs.writeFileSync(path.join(publicDir, 'icon-maskable.svg'), svgSquareContent, 'utf-8');
+
+  // Also write to dist if it exists
+  if (fs.existsSync(distDir)) {
+    fs.writeFileSync(path.join(distDir, 'icon.svg'), svgContent, 'utf-8');
+    fs.writeFileSync(path.join(distDir, 'app-logo.svg'), svgContent, 'utf-8');
+  }
+
+  // Generate PNGs using Sharp
+  const svgBuffer = Buffer.from(svgContent);
+  const svgSquareBuffer = Buffer.from(svgSquareContent);
+  const svgWithBgBuffer = Buffer.from(svgWithBg);
+
+  // 1. favicon-32x32.png
+  await sharp(svgBuffer)
+    .resize(32, 32)
+    .png()
+    .toFile(path.join(publicDir, 'favicon-32x32.png'));
+
+  // 2. apple-touch-icon.png (180x180 with white rounded background)
+  await sharp(svgSquareBuffer)
+    .resize(180, 180)
+    .png()
+    .toFile(path.join(publicDir, 'apple-touch-icon.png'));
+
+  // 3. pwa-192x192.png
+  await sharp(svgSquareBuffer)
+    .resize(192, 192)
+    .png()
+    .toFile(path.join(publicDir, 'pwa-192x192.png'));
+
+  // 4. pwa-512x512.png
+  await sharp(svgSquareBuffer)
+    .resize(512, 512)
+    .png()
+    .toFile(path.join(publicDir, 'pwa-512x512.png'));
+
+  // 5. pwa-maskable-512x512.png (with safe zone margin)
+  await sharp(svgSquareBuffer)
+    .resize(512, 512)
+    .png()
+    .toFile(path.join(publicDir, 'pwa-maskable-512x512.png'));
+
+  // 6. app-logo.png for high-res web usage
+  await sharp(svgWithBgBuffer)
+    .resize(512, 512)
+    .png()
+    .toFile(path.join(publicDir, 'app-logo.png'));
+
+  // Copy to dist if dist exists
+  if (fs.existsSync(distDir)) {
+    const pngs = ['favicon-32x32.png', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png', 'app-logo.png'];
+    for (const f of pngs) {
+      fs.copyFileSync(path.join(publicDir, f), path.join(distDir, f));
+    }
+  }
+
+  console.log('Successfully generated all icons and logos!');
+}
+
+buildAllIcons().catch((err) => {
+  console.error('Error generating icons:', err);
+  process.exit(1);
+});

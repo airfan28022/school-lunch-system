@@ -1,6 +1,6 @@
 import { DailyMenuEntry, MenuItem, SchoolSettings, ActivityPhoto } from '../types';
 
-export const FALLBACK_IMAGE_URL = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%23fef3c7"/><circle cx="200" cy="140" r="60" fill="%23fde68a" stroke="%23f59e0b" stroke-width="4"/><path d="M170 140 Q200 110 230 140" stroke="%23ea580c" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="185" cy="130" r="5" fill="%23ea580c"/><circle cx="215" cy="130" r="5" fill="%23ea580c"/><text x="200" y="240" font-family="sans-serif" font-size="16" font-weight="bold" fill="%23b45309" text-anchor="middle">ภาพอาหารกลางวันโรงเรียน</text></svg>';
+export const FALLBACK_IMAGE_URL = '/app-logo.png';
 
 /**
  * แปลงลิงก์ Google Drive ให้อยู่ในรูปแบบ Direct Link ความเร็วสูง

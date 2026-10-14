@@ -18,7 +18,7 @@ const DEFAULT_SETTINGS = {
   department: 'สังกัดสำนักการศึกษา เทศบาลนครนนทบุรี',
   managerName: 'นางกาญจนา มงคลสุข (หัวหน้างานโภชนาการโรงเรียน)',
   directorName: 'นายประเสริฐ วัฒนาภิรมย์ (ผู้อำนวยการสถานศึกษา)',
-  logoUrl: 'https://lh3.googleusercontent.com/d/1elzE02MEWHhTvxpvVECoFj7y9NpxYg2j',
+  logoUrl: '/app-logo.png',
   gasWebAppUrl: 'https://script.google.com/macros/s/AKfycbzKYFt1-hn2Qq9bnrsQpG9PMhehuuq6yuaE2e6Tq8ogIB1Ft6EQV4FdyzUkL5RxTKqf/exec'
 };
 
