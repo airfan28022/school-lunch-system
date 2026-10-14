@@ -144,24 +144,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <div className="space-y-6">
       {/* Sub-navigation tabs within Settings */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-2 sm:p-2.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 sm:gap-2">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-2 sm:p-2.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-2 gap-1.5 sm:flex sm:items-center sm:gap-2 w-full sm:w-auto">
           <button
             type="button"
             id="tab-settings-menu"
             onClick={() => setActiveSubTab('menu')}
-            className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
               activeSubTab === 'menu'
                 ? 'bg-amber-500 text-slate-950 shadow-xs'
                 : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <UtensilsCrossed className="w-4 h-4" />
-            <span>คลังเมนูอาหาร</span>
-            <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
+            <UtensilsCrossed className="w-4 h-4 shrink-0" />
+            <span className="truncate">คลังเมนูอาหาร</span>
+            <span className={`text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-semibold shrink-0 ${
               activeSubTab === 'menu' ? 'bg-amber-600/30 text-slate-950' : 'bg-slate-200/70 text-slate-700'
             }`}>
-              {menuBank.length} เมนู
+              {menuBank.length}
             </span>
           </button>
 
@@ -169,18 +169,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             type="button"
             id="tab-settings-school"
             onClick={() => setActiveSubTab('school')}
-            className={`flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-5 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
               activeSubTab === 'school'
                 ? 'bg-amber-500 text-slate-950 shadow-xs'
                 : 'bg-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <School className="w-4 h-4" />
-            <span>ข้อมูลสถานศึกษาและโลโก้</span>
+            <School className="w-4 h-4 shrink-0" />
+            <span className="truncate">ข้อมูลสถานศึกษา</span>
           </button>
         </div>
 
-        <div className="text-xs text-slate-500 px-2 sm:px-3">
+        <div className="text-xs text-slate-500 px-2 sm:px-3 hidden sm:block">
           {activeSubTab === 'menu' 
             ? 'จัดการรายการอาหาร แยก 6 หมวดหมู่' 
             : 'ตั้งค่าชื่อโรงเรียน สังกัด และตราสัญลักษณ์'}

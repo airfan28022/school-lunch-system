@@ -36,6 +36,19 @@ const STRICT_CATEGORIES: MenuCategory[] = [
   'ของหวาน'
 ];
 
+// Mobile 2-line category filter mappings
+const MOBILE_CATEGORIES_ROW1: { key: MenuCategory; label: string }[] = [
+  { key: 'ข้าว', label: 'ข้าว' },
+  { key: 'อาหารจานเดียว', label: 'อาหารจานเดียว' },
+  { key: 'อาหารไม่เผ็ด', label: 'ไม่เผ็ด' }
+];
+
+const MOBILE_CATEGORIES_ROW2: { key: MenuCategory; label: string }[] = [
+  { key: 'อาหารเผ็ด', label: 'เผ็ด' },
+  { key: 'ผลไม้', label: 'ผลไม้' },
+  { key: 'ของหวาน', label: 'ของหวาน' }
+];
+
 // Aesthetic category card themes
 const CATEGORY_THEMES: Record<string, {
   headerBg: string;
@@ -296,16 +309,16 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
   return (
     <div className="space-y-4">
       {/* Top Minimalist Header & Filter Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3.5">
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-3.5 sm:p-4 shadow-xs">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-3.5">
           
           {/* Title & Quick Stats */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0 shadow-2xs">
               <UtensilsCrossed className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-tight">
                   คลังเมนูอาหาร
                 </h2>
@@ -319,16 +332,16 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 hidden sm:block">
                 จัดหมวดหมู่ 6 ประเภทหลัก: ข้าว, อาหารจานเดียว, อาหารไม่เผ็ด, อาหารเผ็ด, ผลไม้ และของหวาน
               </p>
             </div>
           </div>
 
           {/* Search & Actions */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             {/* Search Input */}
-            <div className="relative min-w-[180px] sm:min-w-[220px]">
+            <div className="relative w-full sm:w-auto sm:min-w-[220px]">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 id="input-search-menu-bank"
@@ -336,81 +349,168 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
                 placeholder="ค้นหาชื่อเมนู..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all"
+                className="w-full pl-9 pr-8 h-9 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500 focus:bg-white transition-all shadow-2xs"
               />
               {searchQuery && (
                 <button
+                  type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Add New Button */}
-            <button
-              id="btn-open-add-menu"
-              type="button"
-              onClick={() => {
-                if (!isEditMode) {
-                  setPendingAction('openAdd');
-                  setPasswordInput('');
-                  setPasswordError('');
-                  setIsPasswordModalOpen(true);
-                } else {
-                  setIsGlobalAddOpen(true);
-                }
-              }}
-              className="px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-semibold rounded-xl text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="เพิ่มเมนูใหม่"
-            >
-              <Plus className="w-4 h-4" />
-              <span>เพิ่มเมนู</span>
-            </button>
+            {/* Action Buttons: เพิ่มเมนู & ปุ่มแก้ไข (ไอคอนอย่างเดียวบน mobile) อยู่บรรทัดเดียวกัน */}
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              {/* Add New Button */}
+              <button
+                id="btn-open-add-menu"
+                type="button"
+                onClick={() => {
+                  if (!isEditMode) {
+                    setPendingAction('openAdd');
+                    setPasswordInput('');
+                    setPasswordError('');
+                    setIsPasswordModalOpen(true);
+                  } else {
+                    setIsGlobalAddOpen(true);
+                  }
+                }}
+                className="flex-1 sm:flex-initial h-9 px-4 bg-orange-600 hover:bg-orange-700 active:scale-[0.98] text-white font-semibold rounded-xl text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                title="เพิ่มเมนูใหม่"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>เพิ่มเมนู</span>
+              </button>
 
-            {/* Edit / Done Combined Button ("ปุ่มแก้ไขกับปุ่มเสร็จสิ้นคือปุ่มเดียวกัน เพื่อให้หน้าสะอาด") */}
-            <button
-              id="btn-toggle-edit-mode"
-              type="button"
-              onClick={() => {
-                if (isEditMode) {
-                  // Exit edit mode
-                  setIsEditMode(false);
-                  setEditingId(null);
-                  setIsGlobalAddOpen(false);
-                } else {
-                  // Enter edit mode -> prompt for password
-                  setPendingAction('toggleEdit');
-                  setPasswordInput('');
-                  setPasswordError('');
-                  setIsPasswordModalOpen(true);
-                }
-              }}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs ${
-                isEditMode
-                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-500/30'
-                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
-              }`}
-              title={isEditMode ? 'เสร็จสิ้นการแก้ไข' : 'แก้ไขคลังเมนู (ต้องกรอกรหัสผ่าน 1159551)'}
-            >
-              {isEditMode ? (
-                <>
-                  <Check className="w-4 h-4 stroke-[2.5]" />
-                  <span>เสร็จสิ้น</span>
-                </>
-              ) : (
-                <>
-                  <Pencil className="w-4 h-4" />
-                  <span>แก้ไข</span>
-                </>
-              )}
-            </button>
+              {/* Edit / Done Combined Button ("ปุ่มแก้ไขเปลี่ยนเป็นไอคอนอย่างเดียวไม่มีข้อความและอยู่บรรทัดเดียวกับปุ่มเพิ่มเมนู") */}
+              <button
+                id="btn-toggle-edit-mode"
+                type="button"
+                onClick={() => {
+                  if (isEditMode) {
+                    // Exit edit mode
+                    setIsEditMode(false);
+                    setEditingId(null);
+                    setIsGlobalAddOpen(false);
+                  } else {
+                    // Enter edit mode -> prompt for password
+                    setPendingAction('toggleEdit');
+                    setPasswordInput('');
+                    setPasswordError('');
+                    setIsPasswordModalOpen(true);
+                  }
+                }}
+                className={`h-9 shrink-0 px-3 sm:px-3.5 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.98] ${
+                  isEditMode
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-500/30'
+                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
+                }`}
+                title={isEditMode ? 'เสร็จสิ้นการแก้ไข' : 'แก้ไขคลังเมนู (ต้องกรอกรหัสผ่าน 1159551)'}
+                aria-label={isEditMode ? 'เสร็จสิ้นการแก้ไข' : 'แก้ไขคลังเมนู'}
+              >
+                {isEditMode ? (
+                  <>
+                    <Check className="w-4 h-4 stroke-[2.5]" />
+                    <span className="hidden sm:inline">เสร็จสิ้น</span>
+                  </>
+                ) : (
+                  <>
+                    <Pencil className="w-4 h-4" />
+                    <span className="hidden sm:inline">แก้ไข</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
+        {/* Mobile: 2-Line Category Filter (ข้าว, อาหารจานเดียว, ไม่เผ็ด, เผ็ด, ผลไม้, ของหวาน) */}
+        <div className="sm:hidden mt-3 pt-2.5 border-t border-slate-100 space-y-1.5">
+          <div className="flex items-center justify-between px-0.5 pb-0.5">
+            <span className="text-[11px] font-semibold text-slate-500">หมวดหมู่อาหาร</span>
+            <button
+              type="button"
+              id="mobile-pill-cat-all"
+              onClick={() => setActiveCategoryFilter('ALL')}
+              className={`text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1 ${
+                activeCategoryFilter === 'ALL'
+                  ? 'text-orange-600 font-bold'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {activeCategoryFilter === 'ALL' && (
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-600 inline-block"></span>
+              )}
+              แสดงทั้งหมด ({categoryCounts.ALL || 0})
+            </button>
+          </div>
+
+          {/* Line 1: ข้าว, อาหารจานเดียว, ไม่เผ็ด */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {MOBILE_CATEGORIES_ROW1.map(({ key, label }) => {
+              const isSelected = activeCategoryFilter === key;
+              const count = categoryCounts[key] || 0;
+              const theme = CATEGORY_THEMES[key];
+
+              return (
+                <button
+                  key={key}
+                  id={`mobile-pill-cat-${key}`}
+                  type="button"
+                  onClick={() => setActiveCategoryFilter(isSelected ? 'ALL' : key)}
+                  className={`h-8 px-1 rounded-xl text-[11px] transition-all cursor-pointer flex items-center justify-center gap-1 border active:scale-[0.98] ${
+                    isSelected
+                      ? 'bg-orange-600 border-orange-600 text-white shadow-xs font-semibold'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 font-medium'
+                  }`}
+                >
+                  <span className="truncate">{label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono shrink-0 ${
+                    isSelected ? 'bg-orange-700 text-white' : theme.badgeBg + ' ' + theme.badgeText
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Line 2: เผ็ด, ผลไม้, ของหวาน */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {MOBILE_CATEGORIES_ROW2.map(({ key, label }) => {
+              const isSelected = activeCategoryFilter === key;
+              const count = categoryCounts[key] || 0;
+              const theme = CATEGORY_THEMES[key];
+
+              return (
+                <button
+                  key={key}
+                  id={`mobile-pill-cat-${key}`}
+                  type="button"
+                  onClick={() => setActiveCategoryFilter(isSelected ? 'ALL' : key)}
+                  className={`h-8 px-1 rounded-xl text-[11px] transition-all cursor-pointer flex items-center justify-center gap-1 border active:scale-[0.98] ${
+                    isSelected
+                      ? 'bg-orange-600 border-orange-600 text-white shadow-xs font-semibold'
+                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 font-medium'
+                  }`}
+                >
+                  <span className="truncate">{label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono shrink-0 ${
+                    isSelected ? 'bg-orange-700 text-white' : theme.badgeBg + ' ' + theme.badgeText
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Desktop: Standard Horizontal Pill List */}
+        <div className="hidden sm:flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-slate-100">
           <button
             id="pill-cat-all"
             onClick={() => setActiveCategoryFilter('ALL')}
@@ -589,7 +689,7 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
               )}
 
               {/* Items List (Minimalist, Compact Rows) */}
-              <div className="p-2 space-y-1 max-h-[520px] overflow-y-auto">
+              <div className="p-2 space-y-1 sm:max-h-[520px] sm:overflow-y-auto">
                 {items.length === 0 ? (
                   <div className="py-8 text-center text-slate-400">
                     <p className="text-[11px]">ไม่มีรายการ</p>
@@ -614,9 +714,9 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
                       <div
                         key={item.id}
                         id={`menu-item-${item.id}`}
-                        className={`group rounded-lg px-2 py-1.5 text-xs transition-all flex items-center justify-between border border-transparent ${
+                        className={`group rounded-lg px-2.5 py-1.5 text-xs transition-all flex items-center justify-between border border-transparent ${
                           isEditing
-                            ? 'bg-orange-50 border-orange-300'
+                            ? 'bg-orange-50 border-orange-300 shadow-2xs'
                             : 'hover:bg-slate-50 hover:border-slate-200'
                         }`}
                       >
@@ -635,20 +735,20 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
                                   setEditingId(null);
                                 }
                               }}
-                              className="flex-1 px-2 py-0.5 text-xs bg-white border border-orange-400 rounded focus:outline-hidden"
+                              className="flex-1 px-2 py-1 text-xs bg-white border border-orange-400 rounded-lg focus:outline-hidden"
                               autoFocus
                             />
                             <button
                               onClick={() => handleSaveEdit(item)}
                               disabled={!editingName.trim()}
-                              className="p-1 text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer"
+                              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg cursor-pointer active:scale-95 transition-transform"
                               title="บันทึก"
                             >
                               <Check className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => setEditingId(null)}
-                              className="p-1 text-slate-400 hover:bg-slate-100 rounded cursor-pointer"
+                              className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg cursor-pointer active:scale-95 transition-transform"
                               title="ยกเลิก"
                             >
                               <X className="w-3.5 h-3.5" />
@@ -675,7 +775,7 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
                                 <button
                                   id={`btn-edit-${item.id}`}
                                   onClick={() => handleStartEdit(item)}
-                                  className="p-1 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded cursor-pointer transition-colors"
+                                  className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 active:bg-orange-100 rounded-lg cursor-pointer transition-colors active:scale-95"
                                   title="แก้ไขชื่อเมนู"
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
@@ -683,7 +783,7 @@ export const MenuRepository: React.FC<MenuRepositoryProps> = ({
                                 <button
                                   id={`btn-delete-${item.id}`}
                                   onClick={() => setDeletingItem(item)}
-                                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer transition-colors"
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 active:bg-rose-100 rounded-lg cursor-pointer transition-colors active:scale-95"
                                   title="ลบเมนู"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />

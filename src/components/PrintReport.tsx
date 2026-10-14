@@ -339,6 +339,11 @@ export const PrintReport: React.FC<PrintReportProps> = ({
     'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
   ];
 
+  const THAI_MONTHS_SHORT = [
+    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
+  ];
+
   const THAI_DAY_SHORT = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
 
   // 1. รวมเดือนทั้งหมดที่มีเมนูอยู่ในระบบ เพื่อสร้างแท็บเลือกเดือนแบบด่วนและช่วยเลือกเดือนอัตโนมัติ
@@ -643,31 +648,34 @@ export const PrintReport: React.FC<PrintReportProps> = ({
       <div className="no-print bg-white p-2.5 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs">
         {/* Mobile View: Exactly 2 Clean Rows (md:hidden) */}
         <div className="block md:hidden space-y-2">
-          {/* Row 1: Month/Year Selector + พบ..วัน + Delete Month Icon */}
-          <div className="flex items-center justify-between gap-1.5 w-full">
-            {/* Unified Month & Year Selector */}
-            <div className="flex items-center gap-1 bg-slate-50 border border-slate-300 rounded-xl px-2 py-1 shadow-2xs shrink min-w-0">
+          {/* Row 1: เดือน ปี สุ่ม พบวัน ไอคอนลบ เรียงห่างให้เท่าๆกัน เหมาะสม สวยงาม มินิมัล */}
+          <div className="flex items-center justify-between gap-1 w-full">
+            {/* 1. เดือน */}
+            <div className="flex items-center gap-1 bg-slate-50 border border-slate-300 rounded-xl px-1.5 h-8 shadow-2xs shrink-0">
               <Calendar className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
               <select
                 id="select-report-month-mobile"
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer py-0.5 min-w-0"
-                title="เลือกเดือน"
+                className="text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer shrink-0"
+                title={`เลือกเดือน (ปัจจุบัน: ${THAI_MONTHS[selectedMonth - 1]})`}
               >
-                {THAI_MONTHS.map((m, idx) => (
+                {THAI_MONTHS_SHORT.map((m, idx) => (
                   <option key={idx + 1} value={idx + 1}>
                     {m}
                   </option>
                 ))}
               </select>
-              <span className="text-slate-300 text-xs shrink-0">|</span>
+            </div>
+
+            {/* 2. ปี */}
+            <div className="flex items-center bg-slate-50 border border-slate-300 rounded-xl px-2 h-8 shadow-2xs shrink-0">
               <select
                 id="select-report-year-mobile"
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer py-0.5 shrink-0"
-                title="เลือกปี"
+                className="text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer shrink-0"
+                title={`เลือกปี (ปัจจุบัน: ${selectedYear + 543})`}
               >
                 {availableYears.map((y) => (
                   <option key={y} value={y}>
@@ -677,41 +685,73 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               </select>
             </div>
 
-            {/* Right side of Row 1: พบ..วัน + ลบทั้งเดือน */}
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded-xl border border-emerald-200 shrink-0 whitespace-nowrap">
-                พบ {monthEntries.length} วัน
-              </span>
-
-              {monthEntries.length > 0 && (
-                <button
-                  type="button"
-                  id="btn-delete-report-month-mobile"
-                  onClick={() => setIsDeleteMonthModalOpen(true)}
-                  className="p-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 rounded-xl border border-rose-200 flex items-center justify-center shrink-0 cursor-pointer shadow-2xs"
-                  title={`ลบรายการอาหารทั้งหมดในเดือน ${thaiMonthName} ${buddhistYear} (${monthEntries.length} วัน)`}
-                  aria-label="ลบรายการอาหารทั้งเดือน"
-                >
-                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Row 2: สุ่ม (เหลือแค่คำว่า สุ่ม) + เพิ่มวัน + ค้นหา + พิมพ์ */}
-          <div className="flex items-center gap-1.5 w-full">
-            {/* สุ่มจัดอาหาร: ย่อเหลือคำว่า "สุ่ม" */}
+            {/* 3. สุ่ม */}
             <button
               type="button"
               id="btn-randomize-report-month-mobile"
               onClick={handleRandomizeMonthClick}
               disabled={isRandomizing}
-              className="px-2 py-1.5 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 rounded-xl border border-amber-300 flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs disabled:opacity-50 whitespace-nowrap"
+              className="px-2 h-8 text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 active:bg-amber-200 rounded-xl border border-amber-300 flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs disabled:opacity-50 whitespace-nowrap"
               title={`สุ่มจัดเมนูอาหารกลางวันทั้งเดือน ${thaiMonthName} ${buddhistYear}`}
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               <span>{isRandomizing ? 'กำลังสุ่ม...' : 'สุ่ม'}</span>
             </button>
+
+            {/* 4. พบวัน */}
+            <span
+              className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 h-8 rounded-xl border border-emerald-200 shrink-0 whitespace-nowrap shadow-2xs flex items-center justify-center"
+              title={`พบรายการอาหาร ${monthEntries.length} วัน ในเดือน ${thaiMonthName} ${buddhistYear}`}
+            >
+              พบ {monthEntries.length} วัน
+            </span>
+
+            {/* 5. ไอคอนลบ */}
+            <button
+              type="button"
+              id="btn-delete-report-month-mobile"
+              onClick={() => setIsDeleteMonthModalOpen(true)}
+              disabled={monthEntries.length === 0}
+              className={`w-8 h-8 rounded-xl border flex items-center justify-center shrink-0 shadow-2xs transition-colors ${
+                monthEntries.length > 0
+                  ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 border-rose-200 cursor-pointer'
+                  : 'text-slate-300 bg-slate-50 border-slate-200 cursor-not-allowed opacity-50'
+              }`}
+              title={
+                monthEntries.length > 0
+                  ? `ลบรายการอาหารทั้งหมดในเดือน ${thaiMonthName} ${buddhistYear} (${monthEntries.length} วัน)`
+                  : 'ไม่มีรายการอาหารในเดือนนี้'
+              }
+              aria-label="ลบรายการอาหารทั้งเดือน"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Row 2: ค้นหา (อยู่ซ้ายสุด) + เพิ่มวัน + พิมพ์ จัดวางสวยสมดุล พอดี ไม่เอียง */}
+          <div className="flex items-center gap-1.5 w-full">
+            {/* ช่องค้นหา อยู่ซ้ายสุด */}
+            <div className="relative flex-1 min-w-0">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                id="input-filter-report-mobile"
+                type="text"
+                placeholder="ค้นหาเมนู..."
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                className="w-full pl-7 pr-6 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:ring-1 focus:ring-emerald-500 focus:outline-hidden text-slate-800 placeholder:text-slate-400"
+              />
+              {searchFilter && (
+                <button
+                  type="button"
+                  onClick={() => setSearchFilter('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer p-0.5"
+                  aria-label="ล้างการค้นหา"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
 
             {/* เพิ่มวัน */}
             <button
@@ -720,32 +760,19 @@ export const PrintReport: React.FC<PrintReportProps> = ({
                 setNewDateStr(`${monthKey}-01`);
                 setIsAddModalOpen(true);
               }}
-              className="px-2 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs whitespace-nowrap"
+              className="px-2.5 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 active:bg-blue-200 rounded-xl border border-blue-200 flex items-center gap-1 shrink-0 cursor-pointer shadow-2xs whitespace-nowrap"
               title="เพิ่มเมนูวันใหม่"
             >
               <Plus className="w-3.5 h-3.5 text-blue-600 shrink-0" />
               <span>เพิ่มวัน</span>
             </button>
 
-            {/* ช่องค้นหา */}
-            <div className="relative flex-1 min-w-[65px]">
-              <Search className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                id="input-filter-report-mobile"
-                type="text"
-                placeholder="ค้นหา..."
-                value={searchFilter}
-                onChange={(e) => setSearchFilter(e.target.value)}
-                className="w-full pl-6 pr-1.5 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:ring-1 focus:ring-emerald-500 focus:outline-hidden text-slate-800"
-              />
-            </div>
-
             {/* พิมพ์ */}
             <button
               id="btn-print-action-mobile"
               type="button"
               onClick={handlePrint}
-              className="px-2.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1 shrink-0 cursor-pointer whitespace-nowrap"
+              className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer whitespace-nowrap"
               title="สั่งพิมพ์รายงาน"
             >
               <Printer className="w-3.5 h-3.5 shrink-0" />
