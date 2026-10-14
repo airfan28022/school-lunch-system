@@ -20,6 +20,8 @@ import { TaxManagement } from './components/TaxManagement';
 import { SettingsModal } from './components/SettingsModal';
 import { LightboxModal } from './components/LightboxModal';
 import { NotificationToast } from './components/NotificationToast';
+import { LoginScreen } from './components/LoginScreen';
+import { ConfirmModal } from './components/ConfirmModal';
 import { 
   callGasGet, 
   callGasPost, 
@@ -31,14 +33,46 @@ import {
   uploadLogoToServer,
   uploadPhotoToServer,
   testGasConnection,
-  syncWithGas
+  syncWithGas,
+  DEFAULT_SPREADSHEET_URL,
+  queueDirectGasSync
 } from './services/api';
 
 const STORAGE_KEY_SETTINGS = 'school_lunch_settings_v1';
 const STORAGE_KEY_MENU_BANK = 'school_lunch_menu_bank_v1';
 const STORAGE_KEY_DAILY_MENUS = 'school_lunch_daily_menus_v2';
+const STORAGE_KEY_AUTH = 'school_lunch_auth';
 
 export default function App() {
+  // Authentication state (ID: Admin, Password: 1159551)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      const savedAuth = localStorage.getItem(STORAGE_KEY_AUTH) || sessionStorage.getItem(STORAGE_KEY_AUTH);
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth);
+        return Boolean(parsed.isAuthenticated);
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  });
+
+  const [currentUser, setCurrentUser] = useState<string>(() => {
+    try {
+      const savedAuth = localStorage.getItem(STORAGE_KEY_AUTH) || sessionStorage.getItem(STORAGE_KEY_AUTH);
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth);
+        return parsed.username || 'Admin';
+      }
+      return 'Admin';
+    } catch {
+      return 'Admin';
+    }
+  });
+
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
+
   // Navigation active tab - Default to 'tax' (จัดการภาษี) as requested
   const [activeTab, setActiveTab] = useState<'tax' | 'planner' | 'repository' | 'report' | 'settings'>('tax');
 
@@ -212,8 +246,8 @@ export default function App() {
 
     const pullServerData = async (isInitial = false) => {
       if (isPulling) return;
-      // ป้องกันการดึงข้อมูลทับข้อมูลที่เพิ่งสุ่มหรือบันทึกใหม่ในเครื่องภายใน 45 วินาที
-      if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 45000) {
+      // ป้องกันการดึงข้อมูลทับข้อมูลที่เพิ่งสุ่มหรือบันทึกใหม่ในเครื่องภายใน 8 วินาที
+      if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 8000) {
         return;
       }
 
@@ -267,12 +301,12 @@ export default function App() {
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
-    // 4. Periodic polling ทุก 15 วินาทีเมื่อเปิดหน้าจออยู่ (ป้องกันการยิงเซิร์ฟเวอร์ถี่เกินไปและประหยัดโควต้า)
+    // 4. Periodic polling ทุก 8 วินาทีเมื่อเปิดหน้าจออยู่ (ซิงค์เรียลไทม์ทุกเครื่องทุกอุปกรณ์)
     const intervalId = setInterval(() => {
       if (document.visibilityState === 'visible') {
         pullServerData(false);
       }
-    }, 15000);
+    }, 8000);
 
     return () => {
       isMounted = false;
@@ -299,7 +333,7 @@ export default function App() {
 
     // ซิงค์เฉพาะรายการใหม่แบบความเร็วสูงพิเศษ (Fast single item save)
     saveSingleMenuItemDirect(newItem, settings.gasWebAppUrl);
-    saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: false });
+    saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: true });
   };
 
   const handleUpdateMenuItem = async (item: MenuItem) => {
@@ -308,7 +342,7 @@ export default function App() {
     showToast('อัปเดตเมนูแล้ว', `แก้ไขข้อมูล "${item.menuName}" เรียบร้อยแล้ว`, 'success');
 
     saveSingleMenuItemDirect(item, settings.gasWebAppUrl);
-    saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: false });
+    saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: true });
   };
 
   const handleDeleteMenuItem = async (id: string) => {
@@ -324,7 +358,7 @@ export default function App() {
       }).catch((e) => console.warn('Delete menu warning:', e));
     }
 
-    saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: false });
+    saveServerData({ settings, menuBank: updated, dailyMenus, syncToGas: true });
   };
 
   const handleSeedPresets = async () => {
@@ -358,7 +392,7 @@ export default function App() {
 
     // ซิงค์เฉพาะวันที่บันทึกไปยัง Google Sheets ใน ~300ms แทนการวนลูปทั้งเดือน
     saveSingleDailyMenuDirect(entry, settings.gasWebAppUrl);
-    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: false });
+    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
     if (saveRes && saveRes.lastUpdated) {
       lastServerTimestampRef.current = saveRes.lastUpdated;
     }
@@ -408,6 +442,12 @@ export default function App() {
     if (saveRes && saveRes.lastUpdated) {
       lastServerTimestampRef.current = saveRes.lastUpdated;
     }
+
+    // ส่งตรงไปยัง Google Apps Script Web App เพื่อให้แน่ใจว่าบันทึกลงชีตทันที
+    if (settings.gasWebAppUrl) {
+      queueDirectGasSync(settings.gasWebAppUrl, { settings, menuBank, dailyMenus: updated }, 300);
+    }
+
     return true;
   };
 
@@ -689,6 +729,64 @@ export default function App() {
     });
   };
 
+  // -------------------------------------------------------------
+  // Authentication Handlers
+  // -------------------------------------------------------------
+  const handleLoginSuccess = (user: string) => {
+    setIsAuthenticated(true);
+    setCurrentUser(user);
+    showToast('เข้าสู่ระบบสำเร็จ', `ยินดีต้อนรับผู้ดูแลระบบ (${user})`, 'success');
+
+    // ซิงค์ดึงข้อมูลล่าสุดจาก Google Sheets ทันทีหลังล็อกอิน
+    fetchServerData(settings.gasWebAppUrl)
+      .then((data) => {
+        if (data && data.success) {
+          if (data.settings && Object.keys(data.settings).length > 0) {
+            setSettings((prev) => ({ ...prev, ...data.settings }));
+          }
+          if (Array.isArray(data.menuBank) && data.menuBank.length > 0) {
+            setMenuBank(data.menuBank);
+          }
+          if (Array.isArray(data.dailyMenus)) {
+            setDailyMenus(data.dailyMenus);
+          }
+          if (data.lastUpdated) {
+            lastServerTimestampRef.current = data.lastUpdated;
+          }
+        }
+      })
+      .catch((err) => console.warn('Post-login sync notice:', err));
+  };
+
+  const handleConfirmLogout = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY_AUTH);
+      sessionStorage.removeItem(STORAGE_KEY_AUTH);
+    } catch (e) {
+      console.warn('Logout storage clear error:', e);
+    }
+    setIsAuthenticated(false);
+    setShowLogoutConfirm(false);
+    showToast('ออกจากระบบแล้ว', 'ออกจากระบบการทำงานเรียบร้อยแล้ว', 'info');
+  };
+
+  // If user is not logged in, render the dedicated secure login page
+  if (!isAuthenticated) {
+    return (
+      <>
+        <LoginScreen
+          onLoginSuccess={handleLoginSuccess}
+          logoUrl={settings.logoUrl}
+          schoolName={settings.schoolName}
+        />
+        <NotificationToast
+          notifications={notifications}
+          onDismiss={dismissToast}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       {/* Header with live clock & top controls */}
@@ -699,6 +797,9 @@ export default function App() {
         isGasConnected={isGasConnected}
         isSyncing={isSyncing}
         onManualSync={handleManualSync}
+        onLogout={() => setShowLogoutConfirm(true)}
+        username={currentUser}
+        spreadsheetUrl={DEFAULT_SPREADSHEET_URL}
       />
 
       {/* App Body with Left Sticky Vertical Sidebar & Main Content */}
@@ -707,6 +808,9 @@ export default function App() {
         <Sidebar
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          onLogout={() => setShowLogoutConfirm(true)}
+          username={currentUser}
+          spreadsheetUrl={DEFAULT_SPREADSHEET_URL}
         />
 
         {/* Main Content View Container */}
@@ -795,6 +899,18 @@ export default function App() {
       <NotificationToast
         notifications={notifications}
         onDismiss={dismissToast}
+      />
+
+      {/* Logout Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showLogoutConfirm}
+        title="ยืนยันการออกจากระบบ"
+        message="คุณต้องการออกจากระบบหรือไม่? คุณจะต้องใช้ ID: Admin และ Password เพื่อเข้าใช้งานอีกครั้ง"
+        confirmText="ออกจากระบบ"
+        cancelText="ยกเลิก"
+        type="warning"
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
       />
     </div>
   );

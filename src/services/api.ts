@@ -53,6 +53,7 @@ export function fileToBase64(file: File): Promise<string> {
 }
 
 export const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbzKYFt1-hn2Qq9bnrsQpG9PMhehuuq6yuaE2e6Tq8ogIB1Ft6EQV4FdyzUkL5RxTKqf/exec';
+export const DEFAULT_SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/1xl-pI4HwJ_ePGGy2uzHgU1OmFNVkIt_N_CRtzfwyz0M/edit';
 
 /**
  * ยิงเรียก Google Apps Script Backend (GET)
@@ -210,7 +211,7 @@ export function subscribeToLocalSync(callback: (event: { type: string; payload: 
 let gasDebounceTimer: any = null;
 let pendingGasPayload: any = null;
 
-export function queueDirectGasSync(gasUrl: string, payload: any, delayMs: number = 800) {
+export function queueDirectGasSync(gasUrl: string, payload: any, delayMs: number = 400) {
   pendingGasPayload = payload;
   if (gasDebounceTimer) {
     clearTimeout(gasDebounceTimer);

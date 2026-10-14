@@ -200,12 +200,8 @@ async function syncFromGas(gasUrl?: string): Promise<boolean> {
         changed = true;
       }
       if (Array.isArray(data.dailyMenu) && data.dailyMenu.length > 0) {
-        // เฉพาะกรณีที่ store ยังไม่มีข้อมูลรายวันเลย (เริ่มต้นระบบใหม่) จึงจะดึงจาก Google Sheets
-        // ป้องกันการกู้คืนเมนูเก่าที่ผู้ใช้เคยลบหรือสุ่มใหม่ทับ
-        if (!current.dailyMenus || current.dailyMenus.length === 0) {
-          current.dailyMenus = sanitizeDailyMenus(data.dailyMenu);
-          changed = true;
-        }
+        current.dailyMenus = sanitizeDailyMenus(data.dailyMenu);
+        changed = true;
       }
       if (changed) {
         current.lastUpdated = new Date().toISOString();

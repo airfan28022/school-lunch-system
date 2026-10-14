@@ -1,16 +1,20 @@
-import React from 'react';
 import { 
   Calculator, 
   CalendarDays, 
   Printer, 
   Settings,
   ShieldCheck,
-  ChevronRight
+  ChevronRight,
+  LogOut,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: 'planner' | 'repository' | 'report' | 'tax' | 'settings';
   onTabChange: (tab: 'planner' | 'repository' | 'report' | 'tax' | 'settings') => void;
+  onLogout?: () => void;
+  username?: string;
+  spreadsheetUrl?: string;
 }
 
 export const SIDEBAR_NAV_ITEMS = [
@@ -39,7 +43,10 @@ export const SIDEBAR_NAV_ITEMS = [
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
-  onTabChange
+  onTabChange,
+  onLogout,
+  username = 'Admin',
+  spreadsheetUrl
 }) => {
   return (
     <aside 
@@ -116,12 +123,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Bottom: Settings Shortcut & Quick Info */}
-      <div className="pt-4 border-t border-slate-100 space-y-2">
+      {/* Bottom: Settings Shortcut, Sheets Link & Logout */}
+      <div className="pt-3 border-t border-slate-100 space-y-1.5">
         <button
           type="button"
           onClick={() => onTabChange('settings')}
-          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeTab === 'settings'
               ? 'bg-slate-900 text-white shadow-xs'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
@@ -131,8 +138,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span className="flex-1 text-left">ตั้งค่าระบบและคลังเมนู</span>
         </button>
 
-        <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-2 text-[11px] text-slate-500">
-          <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+        {spreadsheetUrl && (
+          <a
+            href={spreadsheetUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="เปิด Google Sheets ฐานข้อมูลกลาง"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 transition-all cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+            <span className="flex-1 text-left">เปิด Google Sheets</span>
+          </a>
+        )}
+
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            title={`ออกจากระบบ (${username})`}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-all cursor-pointer"
+          >
+            <LogOut className="w-4 h-4 text-rose-500" />
+            <span className="flex-1 text-left">ออกจากระบบ ({username})</span>
+          </button>
+        )}
+
+        <div className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 flex items-center gap-2 text-[10px] text-slate-500">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
           <span className="line-clamp-1">บันทึกอัตโนมัติ & ซิงค์ปลอดภัย</span>
         </div>
       </div>

@@ -853,6 +853,66 @@
       "category": "ของหวาน",
       "menuName": "ขนมทับทิมกรอบ",
       "createdAt": "2026-09-25T16:36:59.606Z"
+    },
+    {
+      "id": "MB04",
+      "category": "อาหารจานเดียว",
+      "menuName": "ข้าวมันไก่ต้ม พร้อมน้ำซุปฟัก",
+      "createdAt": "2026-09-26T07:38:31.108Z"
+    },
+    {
+      "id": "MB05",
+      "category": "อาหารจานเดียว",
+      "menuName": "ก๋วยเตี๋ยวหมูสับน้ำใส ลูกชิ้นปลา",
+      "createdAt": "2026-09-26T07:38:31.723Z"
+    },
+    {
+      "id": "MB06",
+      "category": "อาหารจานเดียว",
+      "menuName": "ข้าวผัดอเมริกัน น่องไก่ทอด",
+      "createdAt": "2026-09-26T07:38:32.303Z"
+    },
+    {
+      "id": "MB10",
+      "category": "อาหารไม่เผ็ด",
+      "menuName": "ผัดผักรวมมิตรใส่กุ้งสด",
+      "createdAt": "2026-09-26T07:38:35.532Z"
+    },
+    {
+      "id": "MB11",
+      "category": "อาหารไม่เผ็ด",
+      "menuName": "แกงจืดฟักเขียวกระดูกหมูเห็ดหอม",
+      "createdAt": "2026-09-26T07:38:36.470Z"
+    },
+    {
+      "id": "MB12",
+      "category": "อาหารเผ็ด",
+      "menuName": "แกงเขียวหวานไก่ใส่ฟักและมะเขือเปราะ",
+      "createdAt": "2026-09-26T07:38:37.118Z"
+    },
+    {
+      "id": "MB13",
+      "category": "อาหารเผ็ด",
+      "menuName": "ผัดกะเพราหมูสับใบกะเพราบ้าน",
+      "createdAt": "2026-09-26T07:38:38.794Z"
+    },
+    {
+      "id": "MB14",
+      "category": "อาหารเผ็ด",
+      "menuName": "แกงเผ็ดหมูใส่หน่อไม้สด",
+      "createdAt": "2026-09-26T07:38:39.634Z"
+    },
+    {
+      "id": "MB17",
+      "category": "ผลไม้",
+      "menuName": "สับปะรด",
+      "createdAt": "2026-09-26T07:38:41.348Z"
+    },
+    {
+      "id": "mb-1790239593220",
+      "category": "อาหารจานเดียว",
+      "menuName": "ข้าวหมกไก่",
+      "createdAt": "2026-09-26T07:38:44.630Z"
     }
   ],
   "dailyMenus": [
@@ -860,221 +920,287 @@
       "date": "2026-09-01",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ผัดผักรวม",
-      "spicy": "แกงส้มผักรวมปลากระป๋อง",
-      "dessert": "องุ่น",
+      "spicy": "แกงเผ็ดไก่ใส่ถั่วฝักยาว",
+      "nonSpicy": "แกงจืดกะหล่ำปลี",
+      "dessert": "ส้ม",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:28.145Z"
     },
     {
       "date": "2026-09-02",
       "rice": "",
-      "singleDish": "ข้าวหมกไก่ + น้ำซุปโครงไก่",
-      "nonSpicy": "",
+      "singleDish": "ก๋วยเตี๋ยวไก่",
       "spicy": "",
-      "dessert": "บวชข้าวโพด",
+      "nonSpicy": "",
+      "dessert": "ลอดช่องรวมมิตร",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:28.626Z"
     },
     {
       "date": "2026-09-03",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ไข่เจียวไก่สับ",
-      "spicy": "ผัดผงกะหรี่ไก่",
-      "dessert": "ลําไย",
+      "spicy": "แกงส้มกุ้ง/มะละกอ",
+      "nonSpicy": "ผัดผักรวม",
+      "dessert": "มะม่วงดิบ",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:29.702Z"
     },
     {
       "date": "2026-09-04",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "แกงจืดวุ้นเส้นไก่สับ",
-      "spicy": "ลาบไก่สมุนไพร",
-      "dessert": "ขนมปังราด",
+      "spicy": "ต้มยำรวมมิตร",
+      "nonSpicy": "ผัดกระหล่ําปลีใส่ไข่",
+      "dessert": "เฉาก๊วยนมสด",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:30.207Z"
     },
     {
       "date": "2026-09-07",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ผัดแตงกับไข่",
-      "spicy": "ต้มยำปลาน้ำข้น",
-      "dessert": "แตงโม",
+      "spicy": "ผัดกะเพราหมูสับใบกะเพราบ้าน",
+      "nonSpicy": "ไข่พะโล้หมูสามชั้น เต้าหู้พวง",
+      "dessert": "แอปเปิ้ล",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-24T11:10:19.748Z"
     },
     {
       "date": "2026-09-08",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "แกงจืดไก่สับ",
-      "spicy": "ปลาสามรส",
-      "dessert": "แก้วมังกร",
+      "spicy": "แกงส้มผักรวมไก่",
+      "nonSpicy": "ต้มไก่เห็ดนางฟ้า",
+      "dessert": "ฝรั่ง",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:33.012Z"
     },
     {
       "date": "2026-09-09",
       "rice": "",
-      "singleDish": "ข้าวผัดสามสีไก่ + น้ำซุปโครงไก่",
-      "nonSpicy": "",
+      "singleDish": "ข้าวผัดอเมริกัน น่องไก่ทอด",
       "spicy": "",
-      "dessert": "ขนมปังแซนด์วิช 1 แผ่น",
+      "nonSpicy": "",
+      "dessert": "ลอดช่องรวมมิตร",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-24T11:10:21.388Z"
     },
     {
       "date": "2026-09-10",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ผัดเปรี้ยวหวานไก่",
-      "spicy": "แกงกะทิไก่กับมะละกอ",
-      "dessert": "กล้วย",
+      "spicy": "น้ำพริกไก่",
+      "nonSpicy": "แกงจืดเต้าหู้",
+      "dessert": "องุ่น",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:34.274Z"
     },
     {
       "date": "2026-09-11",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ผัดผักกวางตุ้งไก่",
-      "spicy": "ต้มข่าไก่เห็ดฟาง",
-      "dessert": "ฝรั่ง",
+      "spicy": "แกงเขียวหวานไก่ใส่ฟักและมะเขือเปราะ",
+      "nonSpicy": "ผัดผักรวมมิตรใส่กุ้งสด",
+      "dessert": "ส้ม",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-24T11:10:29.567Z"
     },
     {
       "date": "2026-09-14",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ผัดผักรวมมิตรไก่",
-      "spicy": "น้ำพริกอ่องไก่สับ",
-      "dessert": "มะม่วงดิบ",
+      "spicy": "ผัดกะเพราหมูสับใบกะเพราบ้าน",
+      "nonSpicy": "ไข่พะโล้หมูสามชั้น เต้าหู้พวง",
+      "dessert": "สับปะรด",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-24T11:10:31.458Z"
     },
     {
       "date": "2026-09-15",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ไก่ปั้นก้อนทอด",
-      "spicy": "ผัดพริกไก่",
-      "dessert": "มังคุด",
+      "spicy": "แกงเผ็ดหมูใส่หน่อไม้สด",
+      "nonSpicy": "ต้มจืดเต้าหู้หมูสับสาหร่ายวากาเมะ",
+      "dessert": "แอปเปิ้ล",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-24T11:10:27.018Z"
     },
     {
       "date": "2026-09-16",
       "rice": "",
-      "singleDish": "ข้าวผัดรวม + น้ำซุปโครงไก่",
-      "nonSpicy": "",
+      "singleDish": "ข้าวผัดอนามัย + น้ำซุปโครงไก่",
       "spicy": "",
-      "dessert": "เฉาก๊วยนมสด",
+      "nonSpicy": "",
+      "dessert": "ขนมปังราด",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:36.670Z"
     },
     {
       "date": "2026-09-17",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ผัดคะน้าไก่",
-      "spicy": "แกงมัสมั่นไก่ใส่มันเทศ",
-      "dessert": "เงาะ",
+      "spicy": "แกงคั่วสัปะรดไก่",
+      "nonSpicy": "ผัดเปรี้ยวหวานไก่",
+      "dessert": "สาลี่",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:37.116Z"
     },
     {
       "date": "2026-09-18",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ผัดกระหล่ําปลีใส่กุ้ง",
-      "spicy": "แกงส้มผักรวมปลาช่อน",
-      "dessert": "กล้วยไข่บวชชี",
+      "spicy": "ผัดกะเพราหมูสับใบกะเพราบ้าน",
+      "nonSpicy": "ผัดผักรวมมิตรใส่กุ้งสด",
+      "dessert": "เฉาก๊วย",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-24T11:10:36.820Z"
     },
     {
       "date": "2026-09-21",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ผัดกระหล่ําปลีใส่ไข่",
-      "spicy": "ต้มยำรวมมิตร",
-      "dessert": "แอปเปิ้ล",
+      "spicy": "แกงเผ็ดหมูใส่หน่อไม้สด",
+      "nonSpicy": "ไข่พะโล้หมูสามชั้น เต้าหู้พวง",
+      "dessert": "ส้ม",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-24T11:11:02.245Z"
     },
     {
       "date": "2026-09-22",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "แกงจืดไก่สับสาหร่าย",
-      "spicy": "แกงพะแนงไก่",
-      "dessert": "ส้ม",
+      "spicy": "แกงกะทิไก่กับมะละกอ",
+      "nonSpicy": "ผัดถั่วฝักยาวไก่สับ",
+      "dessert": "แอปเปิ้ล",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:39.545Z"
     },
     {
       "date": "2026-09-23",
       "rice": "",
-      "singleDish": "ข้าวผัดกุ้ง + น้ำซุปโครงไก่",
-      "nonSpicy": "",
+      "singleDish": "ขนมจีน + ทอดมัน",
       "spicy": "",
-      "dessert": "มะละกอสุก",
+      "nonSpicy": "",
+      "dessert": "เงาะ",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:40.024Z"
     },
     {
       "date": "2026-09-24",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "แกงจืดไข่น้ำ",
-      "spicy": "ไก่ผัดตะไคร้",
-      "dessert": "สาลี่",
+      "spicy": "ยําสมุนผักรวม",
+      "nonSpicy": "แกงจืดฟักเขียวไก่สับ",
+      "dessert": "มังคุด",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:40.456Z"
     },
     {
       "date": "2026-09-25",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "แกงจืดกะหล่ำปลี",
-      "spicy": "แกงฉู่ฉี่ปลาทู",
-      "dessert": "ถั่วดําต้มกะทิ",
+      "spicy": "ต้มข่าไก่เห็ดฟาง",
+      "nonSpicy": "ผัดผักบุ้งจีน",
+      "dessert": "ข้าวเหนียวถั่วดํากะทิ",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:40.853Z"
     },
     {
       "date": "2026-09-28",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ต้มจืดไก่ใส่ฟัก",
-      "spicy": "แกงกะทิไก่ผัก",
-      "dessert": "องุ่น",
+      "spicy": "ผัดเผ็ดไก่",
+      "nonSpicy": "ไข่เจียวไก่สับ",
+      "dessert": "ฝรั่ง",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:41.397Z"
     },
     {
       "date": "2026-09-29",
       "rice": "ข้าว",
       "singleDish": "",
-      "nonSpicy": "ไข่ดาว",
-      "spicy": "แกงคั่วสัปะรดไก่",
-      "dessert": "เฉาก๊วยข้าวโพด",
+      "spicy": "แกงพริกปลา",
+      "nonSpicy": "ทอดมันไก่",
+      "dessert": "ขนมปังแซนด์วิช 1 แผ่น",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:41.882Z"
     },
     {
       "date": "2026-09-30",
       "rice": "",
-      "singleDish": "ขนมจีน + ทอดมัน",
-      "nonSpicy": "",
+      "singleDish": "ข้าวยําไก่แซ่บ",
       "spicy": "",
-      "dessert": "ขนมทับทิมกรอบ",
+      "nonSpicy": "",
+      "dessert": "ถั่วดําต้มกะทิ",
+      "photos": [],
       "note": "",
-      "photos": []
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-26T07:50:42.246Z"
     },
     {
       "date": "2026-10-01",
@@ -1087,7 +1213,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:07:43.678Z"
+      "lastModified": "2026-09-26T07:50:42.687Z"
     },
     {
       "date": "2026-10-02",
@@ -1100,7 +1226,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:07:46.419Z"
+      "lastModified": "2026-09-26T07:50:43.156Z"
     },
     {
       "date": "2026-10-05",
@@ -1113,7 +1239,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:07:49.254Z"
+      "lastModified": "2026-09-24T11:11:23.737Z"
     },
     {
       "date": "2026-10-06",
@@ -1126,7 +1252,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:07:51.315Z"
+      "lastModified": "2026-09-24T11:11:39.678Z"
     },
     {
       "date": "2026-10-07",
@@ -1139,7 +1265,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:07:53.851Z"
+      "lastModified": "2026-09-24T11:11:42.399Z"
     },
     {
       "date": "2026-10-08",
@@ -1152,7 +1278,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:07:56.362Z"
+      "lastModified": "2026-09-24T11:11:24.041Z"
     },
     {
       "date": "2026-10-09",
@@ -1165,7 +1291,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:07:58.465Z"
+      "lastModified": "2026-09-26T07:50:48.766Z"
     },
     {
       "date": "2026-10-12",
@@ -1178,7 +1304,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:00.899Z"
+      "lastModified": "2026-09-24T11:12:21.206Z"
     },
     {
       "date": "2026-10-13",
@@ -1191,7 +1317,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:02.928Z"
+      "lastModified": "2026-09-26T07:50:49.628Z"
     },
     {
       "date": "2026-10-14",
@@ -1204,7 +1330,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:05.185Z"
+      "lastModified": "2026-09-24T11:12:25.758Z"
     },
     {
       "date": "2026-10-15",
@@ -1217,7 +1343,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:07.785Z"
+      "lastModified": "2026-09-24T11:12:25.744Z"
     },
     {
       "date": "2026-10-16",
@@ -1230,7 +1356,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:10.774Z"
+      "lastModified": "2026-09-24T11:12:35.549Z"
     },
     {
       "date": "2026-10-19",
@@ -1243,7 +1369,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:12.961Z"
+      "lastModified": "2026-09-26T07:50:51.446Z"
     },
     {
       "date": "2026-10-20",
@@ -1256,7 +1382,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:14.780Z"
+      "lastModified": "2026-09-24T11:12:38.808Z"
     },
     {
       "date": "2026-10-21",
@@ -1269,7 +1395,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:16.638Z"
+      "lastModified": "2026-09-24T11:12:07.713Z"
     },
     {
       "date": "2026-10-22",
@@ -1282,7 +1408,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:19.108Z"
+      "lastModified": "2026-09-24T11:12:10.249Z"
     },
     {
       "date": "2026-10-23",
@@ -1295,7 +1421,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:21.231Z"
+      "lastModified": "2026-09-24T11:12:10.644Z"
     },
     {
       "date": "2026-10-26",
@@ -1308,7 +1434,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:23.638Z"
+      "lastModified": "2026-09-26T07:50:53.977Z"
     },
     {
       "date": "2026-10-27",
@@ -1321,7 +1447,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:26.294Z"
+      "lastModified": "2026-09-26T07:50:54.746Z"
     },
     {
       "date": "2026-10-28",
@@ -1334,7 +1460,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:28.434Z"
+      "lastModified": "2026-09-26T07:50:55.769Z"
     },
     {
       "date": "2026-10-29",
@@ -1347,7 +1473,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:30.418Z"
+      "lastModified": "2026-09-26T07:50:56.264Z"
     },
     {
       "date": "2026-10-30",
@@ -1360,7 +1486,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-23T11:08:32.226Z"
+      "lastModified": "2026-09-26T07:50:56.745Z"
     },
     {
       "date": "2026-11-02",
@@ -1373,7 +1499,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:17.718Z"
+      "lastModified": "2026-09-26T07:50:57.277Z"
     },
     {
       "date": "2026-11-03",
@@ -1386,7 +1512,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:20.398Z"
+      "lastModified": "2026-09-26T07:50:57.800Z"
     },
     {
       "date": "2026-11-04",
@@ -1399,7 +1525,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:22.790Z"
+      "lastModified": "2026-09-24T11:12:21.038Z"
     },
     {
       "date": "2026-11-05",
@@ -1412,7 +1538,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:32.112Z"
+      "lastModified": "2026-09-26T07:50:59.012Z"
     },
     {
       "date": "2026-11-06",
@@ -1425,7 +1551,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:34.575Z"
+      "lastModified": "2026-09-24T11:12:25.829Z"
     },
     {
       "date": "2026-11-09",
@@ -1438,7 +1564,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:37.623Z"
+      "lastModified": "2026-09-26T07:50:59.919Z"
     },
     {
       "date": "2026-11-10",
@@ -1451,7 +1577,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:39.734Z"
+      "lastModified": "2026-09-24T11:12:34.895Z"
     },
     {
       "date": "2026-11-11",
@@ -1464,7 +1590,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:41.811Z"
+      "lastModified": "2026-09-26T07:51:01.033Z"
     },
     {
       "date": "2026-11-12",
@@ -1477,7 +1603,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:43.832Z"
+      "lastModified": "2026-09-26T07:51:01.431Z"
     },
     {
       "date": "2026-11-13",
@@ -1490,7 +1616,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:46.134Z"
+      "lastModified": "2026-09-26T07:51:01.891Z"
     },
     {
       "date": "2026-11-16",
@@ -1503,7 +1629,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:48.465Z"
+      "lastModified": "2026-09-26T07:51:02.315Z"
     },
     {
       "date": "2026-11-17",
@@ -1516,7 +1642,7 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:51.027Z"
+      "lastModified": "2026-09-24T11:11:42.092Z"
     },
     {
       "date": "2026-11-18",
@@ -1529,8 +1655,112 @@
       "note": "",
       "department": "",
       "updatedBy": "ผู้จัดการระบบ",
-      "lastModified": "2026-09-22T12:45:53.510Z"
+      "lastModified": "2026-09-26T07:51:03.205Z"
+    },
+    {
+      "date": "2026-11-19",
+      "rice": "ข้าว",
+      "singleDish": "",
+      "spicy": "แกงเขียวหวานไก่",
+      "nonSpicy": "แกงจืดกะหล่ำปลี",
+      "dessert": "แตงโม",
+      "photos": [],
+      "note": "",
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-25T17:10:18.227Z"
+    },
+    {
+      "date": "2026-11-20",
+      "rice": "ข้าว",
+      "singleDish": "",
+      "spicy": "แกงส้มผักรวมปลากระป๋อง",
+      "nonSpicy": "ผัดกะหล่ำปลีกับไก่",
+      "dessert": "กล้วยไข่บวชชี",
+      "photos": [],
+      "note": "",
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-25T17:10:18.638Z"
+    },
+    {
+      "date": "2026-11-23",
+      "rice": "ข้าว",
+      "singleDish": "",
+      "spicy": "แกงกะทิไก่กับมะละกอ",
+      "nonSpicy": "แกงจืดผักหวานไก่สับ",
+      "dessert": "มะละกอสุก",
+      "photos": [],
+      "note": "",
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-25T17:10:19.131Z"
+    },
+    {
+      "date": "2026-11-24",
+      "rice": "ข้าว",
+      "singleDish": "",
+      "spicy": "แกงส้มปลาทูกับผักบุ้งจีน",
+      "nonSpicy": "ทอดมันไก่",
+      "dessert": "กล้วย",
+      "photos": [],
+      "note": "",
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-25T17:10:19.635Z"
+    },
+    {
+      "date": "2026-11-25",
+      "rice": "",
+      "singleDish": "ข้าวมันไก่ + น้ำซุปโครงไก่",
+      "spicy": "",
+      "nonSpicy": "",
+      "dessert": "ฝรั่ง",
+      "photos": [],
+      "note": "",
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-25T17:10:20.095Z"
+    },
+    {
+      "date": "2026-11-26",
+      "rice": "ข้าว",
+      "singleDish": "",
+      "spicy": "แกงเผ็ดกะทิไก่ หน่อไม้",
+      "nonSpicy": "ต้มจืดไก่สับ",
+      "dessert": "แก้วมังกร",
+      "photos": [],
+      "note": "",
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-25T17:10:20.817Z"
+    },
+    {
+      "date": "2026-11-27",
+      "rice": "ข้าว",
+      "singleDish": "",
+      "spicy": "ไก่ผัดตะไคร้",
+      "nonSpicy": "ผัดผักไก่",
+      "dessert": "เฉาก๊วยนมสด",
+      "photos": [],
+      "note": "",
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-25T17:10:21.895Z"
+    },
+    {
+      "date": "2026-11-30",
+      "rice": "ข้าว",
+      "singleDish": "",
+      "spicy": "ยําไข่เจียว",
+      "nonSpicy": "ไข่ดาว",
+      "dessert": "ขนมปังแซนด์วิช 1 แผ่น",
+      "photos": [],
+      "note": "",
+      "department": "",
+      "updatedBy": "ผู้จัดการระบบ",
+      "lastModified": "2026-09-25T17:10:23.392Z"
     }
   ],
-  "lastUpdated": "2026-09-26T07:23:52.206Z"
+  "lastUpdated": "2026-10-14T04:46:44.601Z"
 }

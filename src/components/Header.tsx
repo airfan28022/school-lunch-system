@@ -4,7 +4,10 @@ import { FALLBACK_IMAGE_URL } from '../services/api';
 import { 
   Settings, 
   Clock, 
-  RefreshCw
+  RefreshCw,
+  LogOut,
+  User,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -14,6 +17,9 @@ interface HeaderProps {
   isGasConnected: boolean;
   isSyncing?: boolean;
   onManualSync?: () => void;
+  onLogout?: () => void;
+  username?: string;
+  spreadsheetUrl?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -22,7 +28,10 @@ export const Header: React.FC<HeaderProps> = ({
   onTabChange,
   isGasConnected,
   isSyncing = false,
-  onManualSync
+  onManualSync,
+  onLogout,
+  username = 'Admin',
+  spreadsheetUrl
 }) => {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
@@ -121,6 +130,23 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-ping' : isGasConnected ? 'bg-emerald-500' : 'bg-slate-400'}`} />
               </button>
 
+              {/* Google Sheets Live Link Button */}
+              {spreadsheetUrl && (
+                <a
+                  id="btn-open-google-sheets"
+                  href={spreadsheetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="เปิดดู Google Sheets ฐานข้อมูลกลาง (ซิงค์เรียลไทม์)"
+                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 hover:bg-white text-emerald-800 border border-emerald-400/80 shadow-2xs hover:shadow-xs transition-all cursor-pointer text-xs font-semibold"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="hidden xl:inline text-[11px] text-emerald-900 font-bold">
+                    Google Sheets
+                  </span>
+                </a>
+              )}
+
               {/* Top-Right Settings Icon */}
               <button
                 id="btn-nav-settings"
@@ -136,6 +162,22 @@ export const Header: React.FC<HeaderProps> = ({
                 <Settings className={`w-4 h-4 ${activeTab === 'settings' ? 'text-amber-400 animate-spin-slow' : 'text-slate-700'}`} />
                 <span className="hidden sm:inline font-bold">ตั้งค่า</span>
               </button>
+
+              {/* User Profile & Logout Button */}
+              {onLogout && (
+                <button
+                  id="btn-logout"
+                  onClick={onLogout}
+                  title={`ออกจากระบบ (${username})`}
+                  aria-label="ออกจากระบบ"
+                  className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl bg-white/90 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-amber-400/80 hover:border-rose-300 shadow-2xs transition-all cursor-pointer text-xs font-semibold"
+                >
+                  <User className="w-3.5 h-3.5 text-amber-700 hidden sm:inline" />
+                  <span className="hidden lg:inline font-bold text-slate-800">{username}</span>
+                  <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                  <span className="text-[11px] text-rose-600 font-bold">ออก</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
