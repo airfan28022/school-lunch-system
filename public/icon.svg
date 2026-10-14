@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ea580c" />
+      <stop offset="50%" stop-color="#f97316" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <filter id="dropShadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#7c2d12" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- App Icon Content -->
+  <g filter="url(#dropShadow)" transform="translate(64, 64)">
+    <!-- Plate / Bowl Outer Rim -->
+    <ellipse cx="192" cy="220" rx="140" ry="85" fill="#ffffff" fill-opacity="0.22" />
+    <ellipse cx="192" cy="214" rx="124" ry="74" fill="#ffffff" />
+    <ellipse cx="192" cy="214" rx="104" ry="60" fill="#fff7ed" />
+    
+    <!-- Food elements inside bowl -->
+    <path d="M140 210 Q 192 180 244 210 Q 192 230 140 210 Z" fill="#ea580c" fill-opacity="0.85" />
+    <circle cx="170" cy="205" r="14" fill="#16a34a" />
+    <circle cx="210" cy="208" r="12" fill="#eab308" />
+    <circle cx="190" cy="216" r="10" fill="#dc2626" />
+
+    <!-- Fork (Left) -->
+    <g transform="translate(60, 90)">
+      <path d="M12 0 L12 40 C12 54 28 54 28 40 L28 0 M17 0 L17 38 M23 0 L23 38 M20 52 L20 120" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+    </g>
+
+    <!-- Spoon (Right) -->
+    <g transform="translate(285, 90)">
+      <ellipse cx="20" cy="28" rx="16" ry="24" fill="#ffffff" />
+      <path d="M20 50 L20 120" stroke="#ffffff" stroke-width="6" stroke-linecap="round" fill="none" />
+    </g>
+
+    <!-- Fresh Leaf / Nutrition Accent Top Center -->
+    <g transform="translate(192, 110)">
+      <path d="M0 0 C25 -25 45 -10 40 20 C20 25 5 15 0 0 Z" fill="#22c55e" />
+      <path d="M0 0 C-25 -25 -45 -10 -40 20 C-20 25 -5 15 0 0 Z" fill="#16a34a" />
+      <path d="M0 20 L0 32" stroke="#15803d" stroke-width="4" stroke-linecap="round" />
+    </g>
+  </g>
+</svg>
