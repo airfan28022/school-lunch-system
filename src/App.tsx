@@ -799,7 +799,6 @@ export default function App() {
         onManualSync={handleManualSync}
         onLogout={() => setShowLogoutConfirm(true)}
         username={currentUser}
-        spreadsheetUrl={DEFAULT_SPREADSHEET_URL}
       />
 
       {/* App Body with Left Sticky Vertical Sidebar & Main Content */}
@@ -810,7 +809,6 @@ export default function App() {
           onTabChange={setActiveTab}
           onLogout={() => setShowLogoutConfirm(true)}
           username={currentUser}
-          spreadsheetUrl={DEFAULT_SPREADSHEET_URL}
         />
 
         {/* Main Content View Container */}
@@ -871,7 +869,8 @@ export default function App() {
               onUpdateMenuItem={handleUpdateMenuItem}
               onDeleteMenuItem={handleDeleteMenuItem}
               onSeedPresets={handleSeedPresets}
-              defaultSubTab="menu"
+              defaultSubTab={activeTab === 'repository' ? 'menu' : 'school'}
+              spreadsheetUrl={DEFAULT_SPREADSHEET_URL}
             />
           )}
         </main>

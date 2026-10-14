@@ -5,8 +5,7 @@ import {
   Settings,
   ShieldCheck,
   ChevronRight,
-  LogOut,
-  FileSpreadsheet
+  LogOut
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -14,7 +13,6 @@ interface SidebarProps {
   onTabChange: (tab: 'planner' | 'repository' | 'report' | 'tax' | 'settings') => void;
   onLogout?: () => void;
   username?: string;
-  spreadsheetUrl?: string;
 }
 
 export const SIDEBAR_NAV_ITEMS = [
@@ -45,8 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   onTabChange,
   onLogout,
-  username = 'Admin',
-  spreadsheetUrl
+  username = 'Admin'
 }) => {
   return (
     <aside 
@@ -138,18 +135,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span className="flex-1 text-left">ตั้งค่าระบบและคลังเมนู</span>
         </button>
 
-        {spreadsheetUrl && (
-          <a
-            href={spreadsheetUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="เปิด Google Sheets ฐานข้อมูลกลาง"
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 transition-all cursor-pointer"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span className="flex-1 text-left">เปิด Google Sheets</span>
-          </a>
-        )}
 
         {onLogout && (
           <button

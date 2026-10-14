@@ -6,8 +6,7 @@ import {
   Clock, 
   RefreshCw,
   LogOut,
-  User,
-  FileSpreadsheet
+  User
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -19,7 +18,6 @@ interface HeaderProps {
   onManualSync?: () => void;
   onLogout?: () => void;
   username?: string;
-  spreadsheetUrl?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -30,8 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   isSyncing = false,
   onManualSync,
   onLogout,
-  username = 'Admin',
-  spreadsheetUrl
+  username = 'Admin'
 }) => {
   const [currentTime, setCurrentTime] = useState<Date>(new Date());
 
@@ -130,22 +127,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-ping' : isGasConnected ? 'bg-emerald-500' : 'bg-slate-400'}`} />
               </button>
 
-              {/* Google Sheets Live Link Button */}
-              {spreadsheetUrl && (
-                <a
-                  id="btn-open-google-sheets"
-                  href={spreadsheetUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title="เปิดดู Google Sheets ฐานข้อมูลกลาง (ซิงค์เรียลไทม์)"
-                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 hover:bg-white text-emerald-800 border border-emerald-400/80 shadow-2xs hover:shadow-xs transition-all cursor-pointer text-xs font-semibold"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                  <span className="hidden xl:inline text-[11px] text-emerald-900 font-bold">
-                    Google Sheets
-                  </span>
-                </a>
-              )}
 
               {/* Top-Right Settings Icon */}
               <button
