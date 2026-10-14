@@ -500,7 +500,7 @@ async function startServer() {
 
   if (!isProd && fs.existsSync(path.resolve(process.cwd(), 'vite.config.ts'))) {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, hmr: false },
       appType: 'spa'
     });
     app.use(vite.middlewares);
