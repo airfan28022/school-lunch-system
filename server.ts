@@ -14,18 +14,21 @@ const STORE_PATH = path.resolve(DATA_DIR, 'store.json');
 
 // Default initial data fallback
 const DEFAULT_SETTINGS = {
-  schoolName: 'โรงเรียนอนุบาลและประถมศึกษาเทศบาลพัฒนา',
-  department: 'สังกัดสำนักการศึกษา เทศบาลนครนนทบุรี',
-  managerName: 'นางกาญจนา มงคลสุข (หัวหน้างานโภชนาการโรงเรียน)',
-  directorName: 'นายประเสริฐ วัฒนาภิรมย์ (ผู้อำนวยการสถานศึกษา)',
-  logoUrl: '/app-logo.png',
+  schoolName: 'โรงเรียนบ้านนาออก',
+  department: 'สังกัดสำนักงานเขตพื้นที่ประถมศึกษากระบี่',
+  managerName: '',
+  directorName: '',
+  logoUrl: 'https://lh3.googleusercontent.com/d/1tJ0PObYNbFQy_N59gj0ZKWkYLN-7a96n',
   gasWebAppUrl: 'https://script.google.com/macros/s/AKfycbzKYFt1-hn2Qq9bnrsQpG9PMhehuuq6yuaE2e6Tq8ogIB1Ft6EQV4FdyzUkL5RxTKqf/exec'
 };
+
+let lastServerSaveTime = 0;
 
 interface StoreData {
   settings: typeof DEFAULT_SETTINGS;
   menuBank: any[];
   dailyMenus: any[];
+  taxRecords?: any[];
   lastUpdated: string;
 }
 
@@ -43,6 +46,7 @@ function initStore(): StoreData {
         settings: parsed.settings || DEFAULT_SETTINGS,
         menuBank: parsed.menuBank || [],
         dailyMenus: parsed.dailyMenus || [],
+        taxRecords: parsed.taxRecords || [],
         lastUpdated: parsed.lastUpdated || new Date().toISOString()
       };
     } catch (e) {
@@ -80,6 +84,7 @@ function initStore(): StoreData {
     settings: DEFAULT_SETTINGS,
     menuBank: initialMenuBank,
     dailyMenus: initialDailyMenus,
+    taxRecords: [],
     lastUpdated: new Date().toISOString()
   };
 
@@ -165,6 +170,7 @@ async function callGas(url: string, payload: any): Promise<any> {
 let isSyncingGas = false;
 async function syncFromGas(gasUrl?: string): Promise<boolean> {
   if (isSyncingGas) return false;
+  if (Date.now() - lastServerSaveTime < 15000) return false;
   isSyncingGas = true;
 
   try {
@@ -203,10 +209,14 @@ async function syncFromGas(gasUrl?: string): Promise<boolean> {
         current.dailyMenus = sanitizeDailyMenus(data.dailyMenu);
         changed = true;
       }
+      if (Array.isArray(data.taxRecords) && data.taxRecords.length > 0) {
+        current.taxRecords = data.taxRecords;
+        changed = true;
+      }
       if (changed) {
         current.lastUpdated = new Date().toISOString();
         writeStore(current);
-        console.log(`[AutoSync] Synced ${current.dailyMenus.length} daily menus and ${current.menuBank.length} menu items from Google Sheets`);
+        console.log(`[AutoSync] Synced ${current.dailyMenus.length} daily menus, ${current.menuBank.length} menu items, and ${(current.taxRecords || []).length} tax records from Google Sheets`);
       }
       return true;
     }
@@ -227,13 +237,17 @@ async function startServer() {
   app.use(express.urlencoded({ extended: true, limit: '30mb' }));
 
   // Ensure store exists on startup
-  const isNewStore = !fs.existsSync(STORE_PATH);
   initStore();
 
-  // If this is a brand new store without prior data, attempt initial sync once
-  if (isNewStore) {
-    syncFromGas().catch((err) => console.warn('Initial sync notice:', err));
-  }
+  // Always perform sync from Google Sheets on server startup
+  syncFromGas().catch((err) => console.warn('Initial GAS sync notice:', err));
+
+  // Periodic automatic synchronization from Google Sheets (every 25s) across all devices
+  setInterval(() => {
+    if (Date.now() - lastServerSaveTime > 15000) {
+      syncFromGas().catch((err) => console.warn('Periodic GAS sync notice:', err));
+    }
+  }, 25000);
 
   // -----------------------------------------------------------------
   // 1. GET /api/data - Fetch all synchronized school data
@@ -246,6 +260,7 @@ async function startServer() {
         settings: latest.settings,
         menuBank: latest.menuBank,
         dailyMenus: latest.dailyMenus,
+        taxRecords: latest.taxRecords || [],
         lastUpdated: latest.lastUpdated
       });
     } catch (err: any) {
@@ -258,7 +273,7 @@ async function startServer() {
   // -----------------------------------------------------------------
   app.post('/api/save', async (req, res) => {
     try {
-      const { settings, menuBank, dailyMenus, syncToGas } = req.body;
+      const { settings, menuBank, dailyMenus, taxRecords, syncToGas } = req.body;
       const current = readStore();
 
       if (settings) {
@@ -270,7 +285,11 @@ async function startServer() {
       if (Array.isArray(dailyMenus)) {
         current.dailyMenus = dailyMenus;
       }
+      if (Array.isArray(taxRecords)) {
+        current.taxRecords = taxRecords;
+      }
 
+      lastServerSaveTime = Date.now();
       writeStore(current);
 
       // Debounced background sync to GAS (merges rapid edits into 1 call)
@@ -285,7 +304,8 @@ async function startServer() {
             settings: current.settings,
             menuBank: current.menuBank,
             dailyMenus: current.dailyMenus,
-            dailyMenu: current.dailyMenus
+            dailyMenu: current.dailyMenus,
+            taxRecords: current.taxRecords || []
           }).catch((e) => console.warn('Background GAS sync warning:', e.message));
         }, 1200);
       }
@@ -470,6 +490,9 @@ async function startServer() {
         if (Array.isArray(data.dailyMenu) && data.dailyMenu.length > 0) {
           current.dailyMenus = sanitizeDailyMenus(data.dailyMenu);
         }
+        if (Array.isArray(data.taxRecords) && data.taxRecords.length > 0) {
+          current.taxRecords = data.taxRecords;
+        }
 
         writeStore(current);
         return res.json({
@@ -477,6 +500,7 @@ async function startServer() {
           settings: current.settings,
           menuBank: current.menuBank,
           dailyMenus: current.dailyMenus,
+          taxRecords: current.taxRecords || [],
           spreadsheetUrl: data.spreadsheetUrl
         });
       } else {
@@ -485,6 +509,19 @@ async function startServer() {
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
+  });
+
+  // -----------------------------------------------------------------
+  // 6. GET /api/download-code-gs - Direct download for Google Apps Script file
+  // -----------------------------------------------------------------
+  app.get(['/api/download-code-gs', '/Code.gs'], (_req, res) => {
+    const codeGsPath = path.resolve(process.cwd(), 'Code.gs');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="Code.gs"');
+    if (fs.existsSync(codeGsPath)) {
+      return res.sendFile(codeGsPath);
+    }
+    return res.status(404).send('Code.gs not found');
   });
 
   // -----------------------------------------------------------------

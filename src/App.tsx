@@ -4,7 +4,8 @@ import {
   DailyMenuEntry, 
   SchoolSettings, 
   ToastNotification, 
-  ActivityPhoto 
+  ActivityPhoto,
+  TaxRecord
 } from './types';
 import { 
   INITIAL_SETTINGS, 
@@ -41,6 +42,7 @@ import {
 const STORAGE_KEY_SETTINGS = 'school_lunch_settings_v1';
 const STORAGE_KEY_MENU_BANK = 'school_lunch_menu_bank_v1';
 const STORAGE_KEY_DAILY_MENUS = 'school_lunch_daily_menus_v2';
+const STORAGE_KEY_TAX_RECORDS = 'thai_school_lunch_tax_records_v1';
 const STORAGE_KEY_AUTH = 'school_lunch_auth';
 
 export default function App() {
@@ -118,6 +120,15 @@ export default function App() {
     }
   });
 
+  const [taxRecords, setTaxRecords] = useState<TaxRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_TAX_RECORDS);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
   // GAS / Cloud connection status
   const [isGasConnected, setIsGasConnected] = useState<boolean>(Boolean(settings.gasWebAppUrl));
 
@@ -182,6 +193,14 @@ export default function App() {
     }
   }, [dailyMenus]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_TAX_RECORDS, JSON.stringify(taxRecords));
+    } catch (e) {
+      console.error('Storage error', e);
+    }
+  }, [taxRecords]);
+
   // Toast Helper
   const showToast = (
     title: string,
@@ -224,6 +243,7 @@ export default function App() {
         if (event.payload.settings) setSettings(event.payload.settings);
         if (event.payload.menuBank) setMenuBank(event.payload.menuBank);
         if (event.payload.dailyMenus) setDailyMenus(event.payload.dailyMenus);
+        if (event.payload.taxRecords) setTaxRecords(event.payload.taxRecords);
       } else if (event.type === 'DAILY_MENU' && event.payload) {
         const entry = event.payload;
         setDailyMenus((prev) => {
@@ -241,6 +261,8 @@ export default function App() {
           const exists = prev.some((m) => m.id === item.id);
           return exists ? prev.map((m) => (m.id === item.id ? item : m)) : [item, ...prev];
         });
+      } else if (event.type === 'TAX_RECORDS' && event.payload) {
+        setTaxRecords(event.payload);
       }
     });
 
@@ -274,6 +296,10 @@ export default function App() {
 
           if (Array.isArray(data.dailyMenus)) {
             setDailyMenus(data.dailyMenus);
+          }
+
+          if (Array.isArray(data.taxRecords)) {
+            setTaxRecords(data.taxRecords);
           }
         }
       } catch (err) {
@@ -461,6 +487,7 @@ export default function App() {
         if (data.settings) setSettings((p) => ({ ...p, ...data.settings }));
         if (data.menuBank) setMenuBank(data.menuBank);
         if (data.dailyMenus) setDailyMenus(data.dailyMenus);
+        if (data.taxRecords) setTaxRecords(data.taxRecords);
         showToast('ซิงค์ข้อมูลสำเร็จ', 'ข้อมูลล่าสุดตรงกันทุกอุปกรณ์แล้ว', 'success');
       } else {
         showToast('ซิงค์เรียบร้อย', 'ข้อมูลในเครื่องเป็นเวอร์ชันล่าสุดแล้ว', 'success');
@@ -702,6 +729,9 @@ export default function App() {
         if (res.dailyMenus) {
           setDailyMenus(res.dailyMenus);
         }
+        if (res.taxRecords) {
+          setTaxRecords(res.taxRecords);
+        }
         setIsGasConnected(true);
         return true;
       }
@@ -709,6 +739,28 @@ export default function App() {
     } catch (err) {
       console.error('handleSyncGas error:', err);
       return false;
+    }
+  };
+
+  const handleSaveTaxRecords = async (updatedRecords: TaxRecord[]) => {
+    setTaxRecords((prev) => {
+      if (prev === updatedRecords) return prev;
+      if (prev.length === updatedRecords.length && JSON.stringify(prev) === JSON.stringify(updatedRecords)) {
+        return prev;
+      }
+      return updatedRecords;
+    });
+    lastLocalSaveTimeRef.current = Date.now();
+    try {
+      await saveServerData({
+        settings,
+        menuBank,
+        dailyMenus,
+        taxRecords: updatedRecords,
+        syncToGas: true
+      });
+    } catch (err) {
+      console.warn('Save tax error:', err);
     }
   };
 
@@ -817,6 +869,8 @@ export default function App() {
             <TaxManagement
               settings={settings}
               showToast={showToast}
+              records={taxRecords}
+              onSaveRecords={handleSaveTaxRecords}
             />
           )}
 
@@ -861,8 +915,6 @@ export default function App() {
               settings={settings}
               onSaveSettings={handleSaveSettings}
               onUploadLogo={handleUploadLogo}
-              onTestGasConnection={handleTestGasConnection}
-              onSyncGas={handleSyncGas}
               showToast={showToast}
               menuBank={menuBank}
               onAddMenuItem={handleAddMenuItem}
@@ -870,7 +922,6 @@ export default function App() {
               onDeleteMenuItem={handleDeleteMenuItem}
               onSeedPresets={handleSeedPresets}
               defaultSubTab={activeTab === 'repository' ? 'menu' : 'school'}
-              spreadsheetUrl={DEFAULT_SPREADSHEET_URL}
             />
           )}
         </main>

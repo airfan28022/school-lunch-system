@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TaxRecord, SchoolSettings } from '../types';
+import { saveServerData } from '../services/api';
 import { 
   Calculator, 
   Calendar as CalendarIcon, 
@@ -21,6 +22,8 @@ import {
 interface TaxManagementProps {
   settings: SchoolSettings;
   showToast: (title: string, description: string, type?: 'success' | 'warning' | 'error' | 'info') => void;
+  records?: TaxRecord[];
+  onSaveRecords?: (records: TaxRecord[]) => void;
 }
 
 // Preset rates according to requirement: 22, 24, 27, 36 (Default is 27)
@@ -38,7 +41,12 @@ const THAI_MONTHS_SHORT = [
   'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'
 ];
 
-export const TaxManagement: React.FC<TaxManagementProps> = ({ settings, showToast }) => {
+export const TaxManagement: React.FC<TaxManagementProps> = ({ 
+  settings, 
+  showToast,
+  records: externalRecords,
+  onSaveRecords 
+}) => {
   // Current date for default month
   const today = new Date();
   const currentYear = today.getFullYear();
@@ -133,12 +141,40 @@ export const TaxManagement: React.FC<TaxManagementProps> = ({ settings, showToas
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [deleteRecordId, setDeleteRecordId] = useState<string | null>(null);
 
-  // Sync records to localStorage
+  // Helper to commit updates triggered by user actions only
+  const commitRecordsUpdate = (newRecords: TaxRecord[]) => {
+    setRecords(newRecords);
+    try {
+      localStorage.setItem(STORAGE_KEY_TAX_RECORDS, JSON.stringify(newRecords));
+    } catch (e) {
+      console.error('Failed to save tax records', e);
+    }
+    if (onSaveRecords) {
+      onSaveRecords(newRecords);
+    } else {
+      saveServerData({ taxRecords: newRecords });
+    }
+  };
+
+  // Sync records from external central store (Google Sheets / Server) ONLY when content actually differs
+  useEffect(() => {
+    if (externalRecords && Array.isArray(externalRecords) && externalRecords.length > 0) {
+      setRecords((prev) => {
+        if (prev === externalRecords) return prev;
+        if (prev.length === externalRecords.length && JSON.stringify(prev) === JSON.stringify(externalRecords)) {
+          return prev;
+        }
+        return externalRecords;
+      });
+    }
+  }, [externalRecords]);
+
+  // Sync records to localStorage cache
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_TAX_RECORDS, JSON.stringify(records));
     } catch (e) {
-      console.error('Failed to save tax records', e);
+      console.error('Failed to save tax records to cache', e);
     }
   }, [records]);
 
@@ -332,7 +368,8 @@ export const TaxManagement: React.FC<TaxManagementProps> = ({ settings, showToas
       createdAt: new Date().toISOString()
     };
 
-    setRecords(prev => [newRecord, ...prev]);
+    const updated = [newRecord, ...records];
+    commitRecordsUpdate(updated);
     setIsAddModalOpen(false);
     showToast(
       'เพิ่มรายการคำนวณภาษีสำเร็จ',
@@ -343,29 +380,29 @@ export const TaxManagement: React.FC<TaxManagementProps> = ({ settings, showToas
 
   // Handle Toggle Paid Status on Record
   const handleTogglePaidStatus = (id: string) => {
-    setRecords(prev =>
-      prev.map(item => {
-        if (item.id === id) {
-          const nextState = !item.isPaid;
-          showToast(
-            nextState ? 'อัปเดตเป็น: จ่ายภาษีแล้ว' : 'อัปเดตเป็น: ยังไม่จ่ายภาษี',
-            `งวดวันที่ ${formatThaiDate(item.startDate)} - ${formatThaiDate(item.endDate)}`,
-            nextState ? 'success' : 'info'
-          );
-          return {
-            ...item,
-            isPaid: nextState,
-            paidAt: nextState ? new Date().toISOString() : undefined
-          };
-        }
-        return item;
-      })
-    );
+    const updated = records.map(item => {
+      if (item.id === id) {
+        const nextState = !item.isPaid;
+        showToast(
+          nextState ? 'อัปเดตเป็น: จ่ายภาษีแล้ว' : 'อัปเดตเป็น: ยังไม่จ่ายภาษี',
+          `งวดวันที่ ${formatThaiDate(item.startDate)} - ${formatThaiDate(item.endDate)}`,
+          nextState ? 'success' : 'info'
+        );
+        return {
+          ...item,
+          isPaid: nextState,
+          paidAt: nextState ? new Date().toISOString() : undefined
+        };
+      }
+      return item;
+    });
+    commitRecordsUpdate(updated);
   };
 
   // Handle Delete Record
   const handleDeleteRecord = (id: string) => {
-    setRecords(prev => prev.filter(item => item.id !== id));
+    const updated = records.filter(item => item.id !== id);
+    commitRecordsUpdate(updated);
     setDeleteRecordId(null);
     showToast('ลบรายการสำเร็จ', 'ข้อมูลรายการภาษีถูกลบเรียบร้อยแล้ว', 'info');
   };

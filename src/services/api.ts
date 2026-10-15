@@ -1,4 +1,4 @@
-import { DailyMenuEntry, MenuItem, SchoolSettings, ActivityPhoto } from '../types';
+import { DailyMenuEntry, MenuItem, SchoolSettings, ActivityPhoto, TaxRecord } from '../types';
 
 export const FALLBACK_IMAGE_URL = '/app-logo.png';
 
@@ -181,7 +181,7 @@ try {
   // Ignore in environments without BroadcastChannel
 }
 
-export function broadcastLocalChange(type: 'MENU_BANK' | 'DAILY_MENU' | 'SETTINGS' | 'ALL', payload: any) {
+export function broadcastLocalChange(type: 'MENU_BANK' | 'DAILY_MENU' | 'SETTINGS' | 'TAX_RECORDS' | 'ALL', payload: any) {
   if (broadcastChannel) {
     try {
       broadcastChannel.postMessage({
@@ -226,7 +226,8 @@ export function queueDirectGasSync(gasUrl: string, payload: any, delayMs: number
         settings: toSend.settings,
         menuBank: toSend.menuBank,
         dailyMenus: toSend.dailyMenus,
-        dailyMenu: toSend.dailyMenus
+        dailyMenu: toSend.dailyMenus,
+        taxRecords: toSend.taxRecords
       });
     } catch (e: any) {
       console.warn('Direct GAS sync notice:', e.message);
@@ -276,12 +277,13 @@ export async function fetchServerData(gasUrlOverride?: string) {
     clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
-      if (data && (data.menuBank || data.settings || data.dailyMenus)) {
+      if (data && (data.menuBank || data.settings || data.dailyMenus || data.taxRecords)) {
         return {
           success: true,
           settings: data.settings,
           menuBank: data.menuBank,
           dailyMenus: data.dailyMenus,
+          taxRecords: data.taxRecords || [],
           lastUpdated: data.lastUpdated
         };
       }
@@ -301,6 +303,7 @@ export async function fetchServerData(gasUrlOverride?: string) {
           settings: gasData.settings,
           menuBank: gasData.menuBank,
           dailyMenus: gasData.dailyMenu || gasData.dailyMenus,
+          taxRecords: gasData.taxRecords || [],
           lastUpdated: new Date().toISOString()
         };
       }
@@ -321,6 +324,7 @@ export async function saveServerData(payload: {
   settings?: SchoolSettings;
   menuBank?: MenuItem[];
   dailyMenus?: DailyMenuEntry[];
+  taxRecords?: TaxRecord[];
   syncToGas?: boolean;
 }) {
   // ทำความสะอาดและป้องกันข้อมูลซ้ำซ้อนก่อนส่ง

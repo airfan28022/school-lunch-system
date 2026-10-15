@@ -28,18 +28,88 @@
     <link href="https://fonts.googleapis.com/css2?family=Prompt:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Sarabun:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
     <script>
-      // Suppress benign dev-server WebSocket HMR errors in cloud container/iframe
-      window.addEventListener('error', function(event) {
-        if (event && (event.message?.includes('WebSocket') || event.error?.message?.includes('WebSocket'))) {
-          event.stopImmediatePropagation();
-          event.preventDefault();
+      // Suppress benign dev-server WebSocket HMR errors in cloud container/iframe (HMR disabled)
+      (function() {
+        const NativeWebSocket = window.WebSocket;
+        if (NativeWebSocket) {
+          const MockWebSocket = function(url, protocols) {
+            const isViteHmr = 
+              (typeof protocols === 'string' && protocols === 'vite-hmr') ||
+              (Array.isArray(protocols) && protocols.includes('vite-hmr')) ||
+              (typeof url === 'string' && url.includes('vite-hmr'));
+
+            if (isViteHmr) {
+              const listeners = { open: [], message: [], close: [], error: [] };
+              const mock = {
+                binaryType: 'blob',
+                bufferedAmount: 0,
+                extensions: '',
+                protocol: 'vite-hmr',
+                readyState: 1, // OPEN
+                url: String(url),
+                CONNECTING: 0,
+                OPEN: 1,
+                CLOSING: 2,
+                CLOSED: 3,
+                onopen: null,
+                onmessage: null,
+                onclose: null,
+                onerror: null,
+                addEventListener: function(type, listener) {
+                  if (listeners[type]) listeners[type].push(listener);
+                  if (type === 'open') {
+                    setTimeout(() => {
+                      const ev = new Event('open');
+                      if (typeof listener === 'function') listener(ev);
+                      if (typeof mock.onopen === 'function') mock.onopen(ev);
+                    }, 0);
+                  }
+                },
+                removeEventListener: function(type, listener) {
+                  if (listeners[type]) {
+                    listeners[type] = listeners[type].filter(l => l !== listener);
+                  }
+                },
+                dispatchEvent: function() { return true; },
+                send: function() {},
+                close: function() { this.readyState = 3; }
+              };
+              return mock;
+            }
+            return new NativeWebSocket(url, protocols);
+          };
+
+          MockWebSocket.CONNECTING = 0;
+          MockWebSocket.OPEN = 1;
+          MockWebSocket.CLOSING = 2;
+          MockWebSocket.CLOSED = 3;
+          MockWebSocket.prototype = NativeWebSocket.prototype;
+          window.WebSocket = MockWebSocket;
         }
-      });
-      window.addEventListener('unhandledrejection', function(event) {
-        if (event && event.reason && String(event.reason).includes('WebSocket')) {
-          event.preventDefault();
-        }
-      });
+
+        // Suppress any stray WebSocket error messages in console or window
+        const origConsoleError = console.error;
+        console.error = function(...args) {
+          if (args.some(arg => typeof arg === 'string' && (arg.includes('WebSocket') || arg.includes('[vite]')))) {
+            return;
+          }
+          origConsoleError.apply(console, args);
+        };
+
+        window.addEventListener('error', function(event) {
+          if (event && (event.message?.includes('WebSocket') || event.error?.message?.includes('WebSocket'))) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        });
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (event && event.reason && String(event.reason).includes('WebSocket')) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+          }
+        });
+      })();
     </script>
   </head>
   <body>
