@@ -29,6 +29,7 @@ interface StoreData {
   menuBank: any[];
   dailyMenus: any[];
   taxRecords?: any[];
+  deletedDates?: string[];
   lastUpdated: string;
 }
 
@@ -47,6 +48,7 @@ function initStore(): StoreData {
         menuBank: parsed.menuBank || [],
         dailyMenus: parsed.dailyMenus || [],
         taxRecords: parsed.taxRecords || [],
+        deletedDates: parsed.deletedDates || [],
         lastUpdated: parsed.lastUpdated || new Date().toISOString()
       };
     } catch (e) {
@@ -85,6 +87,7 @@ function initStore(): StoreData {
     menuBank: initialMenuBank,
     dailyMenus: initialDailyMenus,
     taxRecords: [],
+    deletedDates: [],
     lastUpdated: new Date().toISOString()
   };
 
@@ -206,8 +209,12 @@ async function syncFromGas(gasUrl?: string): Promise<boolean> {
         changed = true;
       }
       if (Array.isArray(data.dailyMenu) && data.dailyMenu.length > 0) {
-        current.dailyMenus = sanitizeDailyMenus(data.dailyMenu);
-        changed = true;
+        const deletedSet = new Set(current.deletedDates || []);
+        const sanitized = sanitizeDailyMenus(data.dailyMenu).filter((item) => !deletedSet.has(item.date));
+        if (JSON.stringify(sanitized) !== JSON.stringify(current.dailyMenus || [])) {
+          current.dailyMenus = sanitized;
+          changed = true;
+        }
       }
       if (Array.isArray(data.taxRecords) && data.taxRecords.length > 0) {
         current.taxRecords = data.taxRecords;
@@ -261,6 +268,7 @@ async function startServer() {
         menuBank: latest.menuBank,
         dailyMenus: latest.dailyMenus,
         taxRecords: latest.taxRecords || [],
+        deletedDates: latest.deletedDates || [],
         lastUpdated: latest.lastUpdated
       });
     } catch (err: any) {
@@ -273,7 +281,7 @@ async function startServer() {
   // -----------------------------------------------------------------
   app.post('/api/save', async (req, res) => {
     try {
-      const { settings, menuBank, dailyMenus, taxRecords, syncToGas } = req.body;
+      const { settings, menuBank, dailyMenus, taxRecords, deletedDates, syncToGas } = req.body;
       const current = readStore();
 
       if (settings) {
@@ -284,9 +292,17 @@ async function startServer() {
       }
       if (Array.isArray(dailyMenus)) {
         current.dailyMenus = dailyMenus;
+        // หากผู้ใช้บันทึกหรือสุ่มเมนูวันนั้นใหม่ ให้ปลดล็อคออกจากรายการที่ถูกลบ
+        const savedDates = new Set(dailyMenus.map((m: any) => m && m.date));
+        if (current.deletedDates) {
+          current.deletedDates = current.deletedDates.filter((d) => !savedDates.has(d));
+        }
       }
       if (Array.isArray(taxRecords)) {
         current.taxRecords = taxRecords;
+      }
+      if (Array.isArray(deletedDates)) {
+        current.deletedDates = Array.from(new Set([...(current.deletedDates || []), ...deletedDates]));
       }
 
       lastServerSaveTime = Date.now();
@@ -312,6 +328,52 @@ async function startServer() {
 
       res.json({
         success: true,
+        deletedDates: current.deletedDates || [],
+        lastUpdated: current.lastUpdated
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // -----------------------------------------------------------------
+  // 2.1 POST /api/delete-daily-menu - Permanent deletion across all devices
+  // -----------------------------------------------------------------
+  app.post('/api/delete-daily-menu', async (req, res) => {
+    try {
+      const { date, dates } = req.body;
+      const targetDates: string[] = Array.isArray(dates) ? dates : (date ? [date] : []);
+      if (targetDates.length === 0) {
+        return res.status(400).json({ success: false, error: 'No dates provided' });
+      }
+
+      const current = readStore();
+      const toDeleteSet = new Set(targetDates.map((d: string) => String(d).trim().slice(0, 10)));
+
+      // กรองรายการอาหารที่ถูกลบออกอย่างเด็ดขาด
+      current.dailyMenus = (current.dailyMenus || []).filter((m) => !toDeleteSet.has(m.date));
+      current.deletedDates = Array.from(new Set([...(current.deletedDates || []), ...Array.from(toDeleteSet)]));
+
+      lastServerSaveTime = Date.now();
+      writeStore(current);
+
+      // สั่งซิงค์ลง Google Sheets แบบทันทีเพื่อล้างข้อมูลแถวที่ลบออกจากชีต
+      const gasUrl = current.settings.gasWebAppUrl || DEFAULT_SETTINGS.gasWebAppUrl;
+      if (gasUrl) {
+        callGas(gasUrl, {
+          action: 'syncAll',
+          settings: current.settings,
+          menuBank: current.menuBank,
+          dailyMenus: current.dailyMenus,
+          dailyMenu: current.dailyMenus,
+          taxRecords: current.taxRecords || []
+        }).catch((err) => console.warn('GAS delete sync notice:', err.message));
+      }
+
+      res.json({
+        success: true,
+        deletedDates: Array.from(toDeleteSet),
+        dailyMenus: current.dailyMenus,
         lastUpdated: current.lastUpdated
       });
     } catch (err: any) {

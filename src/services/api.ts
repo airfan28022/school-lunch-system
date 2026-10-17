@@ -325,6 +325,7 @@ export async function saveServerData(payload: {
   menuBank?: MenuItem[];
   dailyMenus?: DailyMenuEntry[];
   taxRecords?: TaxRecord[];
+  deletedDates?: string[];
   syncToGas?: boolean;
 }) {
   // ทำความสะอาดและป้องกันข้อมูลซ้ำซ้อนก่อนส่ง
@@ -372,6 +373,32 @@ export async function saveServerData(payload: {
   }
 
   return serverResult || { success: true, lastUpdated: new Date().toISOString() };
+}
+
+/**
+ * ลบรายการอาหารกลางวันออกจาก Server และ Google Sheets อย่างถาวร (ป้องกันการเด้งกลับมาอีก)
+ */
+export async function deleteDailyMenuFromServer(dates: string[] | string): Promise<boolean> {
+  const targetDates = Array.isArray(dates) ? dates : [dates];
+  if (targetDates.length === 0) return true;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch('/api/delete-daily-menu', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dates: targetDates }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      return true;
+    }
+  } catch (err) {
+    console.warn('deleteDailyMenuFromServer notice:', err);
+  }
+  return false;
 }
 
 /**

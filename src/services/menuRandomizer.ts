@@ -9,12 +9,24 @@ const toDateString = (d: Date) => {
 };
 
 /**
+ * Helper shuffle array using Fisher-Yates algorithm
+ */
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+/**
  * Monthly Menu Randomizer Engine (ระบบสุ่มจัดอาหารกลางวันตามหลักโภชนาการโรงเรียน)
- * - ความหลากหลายสูง ป้องกันความเบื่อ: แต่ละสัปดาห์ในเดือนมีเมนูที่หลากหลายไม่ซ้ำกัน
- * - เชื่อมโยงกับเดือนที่แล้ว: ตรวจสอบเมนูเดือนก่อนหน้า ลดการสุ่มเมนูที่เพิ่งกินบ่อยในเดือนก่อน
- * - วันพุธ: อาหารจานเดียว + ขนมหวานหรือผลไม้ (หมุนเวียนไม่ซ้ำกันทุกวันพุธ)
- * - วันจันทร์, อังคาร, พฤหัสบดี, ศุกร์: ข้าว + กับข้าวเผ็ด + กับข้าวไม่เผ็ด + ขนมหวานหรือผลไม้
- * - ของหวาน: สลับ 2 วันต่อสัปดาห์ กับ 1 วันต่อสัปดาห์ วันที่เหลือเป็นผลไม้สด
+ * 1. ไม่ซ้ำกันในเดือนเดียวกัน: หมุนเวียนคลังเมนูไม่ให้เมนูกับข้าวซ้ำกันตลอดทั้งเดือน
+ * 2. สุ่มแต่ละครั้งไม่ซ้ำเดิม: ตรวจสอบเมนูที่มีอยู่เดิมของเดือนนั้น เพื่อให้การกดสุ่มแต่ละครั้งได้เมนูใหม่ที่แตกต่างออกไปเสมอ
+ * 3. วันพุธ: อาหารจานเดียว + ขนมหวานหรือผลไม้ (หมุนเวียนไม่ซ้ำกันทุกวันพุธ)
+ * 4. วันจันทร์, อังคาร, พฤหัสบดี, ศุกร์: ข้าว + กับข้าวเผ็ด + กับข้าวไม่เผ็ด + ขนมหวานหรือผลไม้
+ * 5. ของหวาน: สลับ 1-2 วันต่อสัปดาห์ วันที่เหลือเป็นผลไม้สด
  */
 export function generateMonthlyMenu(
   randomMonth: number,
@@ -44,7 +56,10 @@ export function generateMonthlyMenu(
   };
 
   const getPool = (category: MenuCategory): MenuItem[] => {
-    const fromBank = menuBank.filter((m) => m.category === category);
+    let fromBank = menuBank.filter((m) => m.category === category);
+    if (category === 'ของหวาน' || category === 'ขนมหวาน') {
+      fromBank = menuBank.filter((m) => m.category === 'ของหวาน' || m.category === 'ขนมหวาน');
+    }
     if (fromBank.length > 0) return fromBank;
     return INITIAL_MENU_BANK.filter((m) => m.category === category);
   };
@@ -60,33 +75,18 @@ export function generateMonthlyMenu(
   const fruitItems = fruitBank.length > 0 ? fruitBank : INITIAL_MENU_BANK.filter((m) => m.category === 'ผลไม้');
 
   const dessertBank = menuBank.filter(
-    (m) => m.category === 'ของหวาน' || (m.category === 'ผลไม้-ของหวาน' && isDessertName(m.menuName))
+    (m) => m.category === 'ของหวาน' || m.category === 'ขนมหวาน' || (m.category === 'ผลไม้-ของหวาน' && isDessertName(m.menuName))
   );
   const dessertItems =
-    dessertBank.length > 0 ? dessertBank : INITIAL_MENU_BANK.filter((m) => m.category === 'ของหวาน');
+    dessertBank.length > 0 ? dessertBank : INITIAL_MENU_BANK.filter((m) => m.category === 'ของหวาน' || m.category === 'ขนมหวาน');
 
-  // ดึงข้อมูลเมนูของ "เดือนที่แล้ว" เพื่อนำมาคำนวณความหลากหลาย ให้แตกต่างจากเดือนก่อน
-  const prevYear = randomMonth === 1 ? normalizedYear - 1 : normalizedYear;
-  const prevMonth = randomMonth === 1 ? 12 : randomMonth - 1;
-  const prevMonthPrefix = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
-  const prevMonthEntries = dailyMenus.filter((m) => m.date.startsWith(prevMonthPrefix));
-
-  const prevMonthDishCounts = new Map<string, number>();
-  const prevWedSingleDishes = new Set<string>();
-
-  prevMonthEntries.forEach((entry) => {
-    const parts = entry.date.split('-').map(Number);
-    const entryY = parts[0] > 2400 ? parts[0] - 543 : parts[0];
-    const dayOfWeek = new Date(entryY, parts[1] - 1, parts[2], 12, 0, 0).getDay();
-    if (dayOfWeek === 3 && entry.singleDish) {
-      prevWedSingleDishes.add(entry.singleDish.trim());
+  // ตรวจสอบเมนูที่มีอยู่เดิมของเดือนนี้ เพื่อให้การสุ่มใหม่แต่ละครั้ง "ไม่ซ้ำเดิม" กับที่มีอยู่
+  const currentMonthPrefix = `${normalizedYear}-${String(randomMonth).padStart(2, '0')}`;
+  const existingThisMonthMap = new Map<string, DailyMenuEntry>();
+  dailyMenus.forEach((entry) => {
+    if (entry && entry.date && entry.date.startsWith(currentMonthPrefix)) {
+      existingThisMonthMap.set(entry.date.trim().slice(0, 10), entry);
     }
-    [entry.rice, entry.singleDish, entry.nonSpicy, entry.spicy, entry.dessert].forEach((dish) => {
-      if (dish && dish.trim()) {
-        const clean = dish.trim();
-        prevMonthDishCounts.set(clean, (prevMonthDishCounts.get(clean) || 0) + 1);
-      }
-    });
   });
 
   // รวบรวมวันทำการเรียน (จันทร์-ศุกร์) ทั้งหมดในเดือนที่เลือก แยกเป็นสัปดาห์
@@ -95,7 +95,7 @@ export function generateMonthlyMenu(
 
   let currentWeek: Date[] = [];
   for (let day = 1; day <= daysInMonth; day++) {
-    // ใช้เวลาเที่ยงวัน (12:00:00) ป้องกันการขยับของวันจาก Timezone / Daylight saving อย่างเด็ดขาด
+    // ใช้เวลาเที่ยงวัน (12:00:00) ป้องกันการคลาดเคลื่อนของ Timezone
     const d = new Date(normalizedYear, randomMonth - 1, day, 12, 0, 0);
     const dayOfWeek = d.getDay(); // 0=Sun, 1=Mon, ..., 5=Fri, 6=Sat
 
@@ -112,79 +112,68 @@ export function generateMonthlyMenu(
     schoolDaysByWeek.push({ weekNumber: schoolDaysByWeek.length + 1, dates: currentWeek });
   }
 
-  // ระบบติดตามความถี่และระยะห่างของเมนู
-  const usedInMonthCount = new Map<string, number>();
-  const lastUsedSchoolDayIndex = new Map<string, number>();
-  const wedSingleDishesInMonth = new Set<string>();
-  let totalSchoolDaysCount = 0;
+  // ระบบติดตามเมนูที่ใช้แล้วในเดือนนี้ เพื่อรับประกัน "ไม่ซ้ำกันตลอดทั้งเดือน"
+  const usedSpicyInMonth = new Set<string>();
+  const usedNonSpicyInMonth = new Set<string>();
+  const usedSingleInMonth = new Set<string>();
+  const usedDessertInMonth = new Set<string>();
+  const usedFruitInMonth = new Set<string>();
+  const usedRiceInMonth = new Set<string>();
 
+  /**
+   * ฟังก์ชันเลือกเมนูแบบรับประกันไม่ซ้ำกัน:
+   * 1. ไม่ซ้ำในเดือนเดียวกัน (ถ้าคลังเมนูมีเพียงพอ)
+   * 2. ไม่ซ้ำในสัปดาห์เดียวกัน
+   * 3. ไม่ซ้ำกับเมนูเดิมที่มีอยู่ก่อนกดสุ่มรอบนี้
+   */
   const pickDiverseItem = (
     pool: MenuItem[],
+    usedInMonth: Set<string>,
     currentWeekDishes: Set<string>,
-    options?: {
-      isWednesdaySingleDish?: boolean;
-      isWeek1?: boolean;
-      schoolDayIndex?: number;
-    }
+    previousDishName?: string
   ): string => {
     if (!pool || pool.length === 0) return '';
-    const dayIdx = options?.schoolDayIndex ?? totalSchoolDaysCount;
-    const isWed = Boolean(options?.isWednesdaySingleDish);
-    const isWk1 = Boolean(options?.isWeek1);
 
-    let candidates = pool.filter((item) => !currentWeekDishes.has(item.menuName));
+    // สุ่มสับเปลี่ยนรายการใน pool ทุกครั้ง
+    const shuffledPool = shuffle(pool);
+
+    // ระดับ 1: ยังไม่เคยใช้ในเดือนนี้ + ไม่ซ้ำในสัปดาห์นี้ + ไม่ซ้ำกับของเดิมก่อนกดสุ่ม
+    let candidates = shuffledPool.filter(
+      (item) =>
+        !usedInMonth.has(item.menuName) &&
+        !currentWeekDishes.has(item.menuName) &&
+        (!previousDishName || item.menuName !== previousDishName)
+    );
+
+    // ระดับ 2: ถ้าหมด ให้ยอมให้เหมือนก่อนกดสุ่มได้ แต่ต้องยังไม่เคยใช้ในเดือนนี้และไม่ซ้ำในสัปดาห์นี้
     if (candidates.length === 0) {
-      candidates = pool;
+      candidates = shuffledPool.filter(
+        (item) => !usedInMonth.has(item.menuName) && !currentWeekDishes.has(item.menuName)
+      );
     }
 
-    if (isWed && wedSingleDishesInMonth.size < pool.length) {
-      const unusedInMonth = candidates.filter((item) => !wedSingleDishesInMonth.has(item.menuName));
-      if (unusedInMonth.length > 0) {
-        candidates = unusedInMonth;
-      }
+    // ระดับ 3: หากคลังมีจำนวนน้อยกว่าจำนวนวันในเดือน (เช่น ข้าว หรือ ผลไม้) ให้เริ่มหมุนเวียนรอบใหม่โดยไม่ซ้ำในสัปดาห์และไม่ซ้ำรอบก่อน
+    if (candidates.length === 0) {
+      candidates = shuffledPool.filter(
+        (item) =>
+          !currentWeekDishes.has(item.menuName) &&
+          (!previousDishName || item.menuName !== previousDishName)
+      );
     }
 
-    const scored = candidates.map((item) => {
-      const name = item.menuName;
-      let penalty = 0;
+    // ระดับ 4: ถ้ายังไม่มี ให้เลือกจากที่ไม่ซ้ำในสัปดาห์
+    if (candidates.length === 0) {
+      candidates = shuffledPool.filter((item) => !currentWeekDishes.has(item.menuName));
+    }
 
-      const monthFreq = usedInMonthCount.get(name) || 0;
-      penalty += monthFreq * 25;
+    // ระดับ 5: กรณีสุดวิสัย ใช้ทั้ง pool
+    if (candidates.length === 0) {
+      candidates = shuffledPool;
+    }
 
-      if (lastUsedSchoolDayIndex.has(name)) {
-        const daysAgo = dayIdx - (lastUsedSchoolDayIndex.get(name) || 0);
-        if (daysAgo <= 2) penalty += 60;
-        else if (daysAgo <= 5) penalty += 25;
-        else if (daysAgo <= 9) penalty += 10;
-      }
-
-      const prevCount = prevMonthDishCounts.get(name) || 0;
-      penalty += prevCount * 4;
-      if (isWk1 && prevCount > 0) {
-        penalty += prevCount * 8;
-      }
-
-      if (isWed && prevWedSingleDishes.has(name)) {
-        penalty += 20;
-      }
-
-      penalty += Math.random() * 3;
-      return { name, penalty };
-    });
-
-    scored.sort((a, b) => a.penalty - b.penalty);
-
-    const minPenalty = scored[0].penalty;
-    const topCandidates = scored.filter((s) => s.penalty <= minPenalty + 3.5);
-    const chosen = topCandidates[Math.floor(Math.random() * topCandidates.length)].name;
-
-    usedInMonthCount.set(chosen, (usedInMonthCount.get(chosen) || 0) + 1);
-    lastUsedSchoolDayIndex.set(chosen, dayIdx);
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)].menuName;
+    usedInMonth.add(chosen);
     currentWeekDishes.add(chosen);
-    if (isWed) {
-      wedSingleDishesInMonth.add(chosen);
-    }
-
     return chosen;
   };
 
@@ -193,8 +182,8 @@ export function generateMonthlyMenu(
   schoolDaysByWeek.forEach((week, weekIdx) => {
     const days = week.dates;
     const weekDishes = new Set<string>();
-    const isWeek1 = weekIdx === 0;
 
+    // การจัดขนมหวานและผลไม้: สัปดาห์ละ 1-2 วันเป็นขนมหวาน วันที่เหลือเป็นผลไม้สด
     const targetDessertCount = weekIdx % 2 === 0 ? 2 : 1;
     const dessertIndices = new Set<number>();
     const wedIdx = days.findIndex((d) => d.getDay() === 3);
@@ -229,10 +218,10 @@ export function generateMonthlyMenu(
     }
 
     days.forEach((dateObj, idx) => {
-      totalSchoolDaysCount++;
       const dateStr = toDateString(dateObj);
       const dayOfWeek = dateObj.getDay();
       const isWednesday = dayOfWeek === 3;
+      const prevEntry = existingThisMonthMap.get(dateStr);
 
       let itemRice = '';
       let itemSingleDish = '';
@@ -241,41 +230,59 @@ export function generateMonthlyMenu(
       let itemSweet = '';
 
       const isDessertToday = dessertIndices.has(idx);
-      const sweetPool = isDessertToday
-        ? dessertItems.length > 0
-          ? dessertItems
-          : fruitItems
-        : fruitItems.length > 0
-        ? fruitItems
-        : dessertItems;
-
-      itemSweet = pickDiverseItem(sweetPool, weekDishes, {
-        schoolDayIndex: totalSchoolDaysCount,
-        isWeek1
-      });
+      if (isDessertToday) {
+        itemSweet = pickDiverseItem(
+          dessertItems.length > 0 ? dessertItems : fruitItems,
+          usedDessertInMonth,
+          weekDishes,
+          prevEntry?.dessert
+        );
+      } else {
+        itemSweet = pickDiverseItem(
+          fruitItems.length > 0 ? fruitItems : dessertItems,
+          usedFruitInMonth,
+          weekDishes,
+          prevEntry?.dessert
+        );
+      }
 
       if (isWednesday) {
-        itemSingleDish = pickDiverseItem(singleDishItems, weekDishes, {
-          isWednesdaySingleDish: true,
-          schoolDayIndex: totalSchoolDaysCount,
-          isWeek1
-        });
+        // วันพุธ: อาหารจานเดียว
+        itemSingleDish = pickDiverseItem(
+          singleDishItems,
+          usedSingleInMonth,
+          weekDishes,
+          prevEntry?.singleDish
+        );
         itemRice = '';
         itemNonSpicy = '';
         itemSpicy = '';
       } else {
-        itemRice = pickDiverseItem(riceItems, weekDishes, {
-          schoolDayIndex: totalSchoolDaysCount,
-          isWeek1
-        });
-        itemNonSpicy = pickDiverseItem(nonSpicyItems, weekDishes, {
-          schoolDayIndex: totalSchoolDaysCount,
-          isWeek1
-        });
-        itemSpicy = pickDiverseItem(spicyItems, weekDishes, {
-          schoolDayIndex: totalSchoolDaysCount,
-          isWeek1
-        });
+        // วันอื่นๆ: ข้าว + กับข้าวไม่เผ็ด + กับข้าวเผ็ด
+        // ข้าว: ถ้าใช้ครบแล้ว รีเซ็ต pool ข้าว
+        if (usedRiceInMonth.size >= riceItems.length) {
+          usedRiceInMonth.clear();
+        }
+        itemRice = pickDiverseItem(
+          riceItems,
+          usedRiceInMonth,
+          weekDishes,
+          prevEntry?.rice
+        );
+
+        itemNonSpicy = pickDiverseItem(
+          nonSpicyItems,
+          usedNonSpicyInMonth,
+          weekDishes,
+          prevEntry?.nonSpicy
+        );
+
+        itemSpicy = pickDiverseItem(
+          spicyItems,
+          usedSpicyInMonth,
+          weekDishes,
+          prevEntry?.spicy
+        );
       }
 
       generatedEntries.push({
@@ -286,7 +293,7 @@ export function generateMonthlyMenu(
         spicy: itemSpicy,
         dessert: itemSweet,
         note: '',
-        photos: []
+        photos: prevEntry?.photos || []
       });
     });
   });

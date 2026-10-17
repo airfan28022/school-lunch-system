@@ -36,13 +36,15 @@ import {
   testGasConnection,
   syncWithGas,
   DEFAULT_SPREADSHEET_URL,
-  queueDirectGasSync
+  queueDirectGasSync,
+  deleteDailyMenuFromServer
 } from './services/api';
 
 const STORAGE_KEY_SETTINGS = 'school_lunch_settings_v1';
 const STORAGE_KEY_MENU_BANK = 'school_lunch_menu_bank_v1';
 const STORAGE_KEY_DAILY_MENUS = 'school_lunch_daily_menus_v2';
 const STORAGE_KEY_TAX_RECORDS = 'thai_school_lunch_tax_records_v1';
+const STORAGE_KEY_DELETED_DATES = 'school_lunch_deleted_dates_v1';
 const STORAGE_KEY_AUTH = 'school_lunch_auth';
 
 export default function App() {
@@ -107,14 +109,28 @@ export default function App() {
     }
   });
 
+  const [deletedDates, setDeletedDates] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_DELETED_DATES);
+      return saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+
   const [dailyMenus, setDailyMenus] = useState<DailyMenuEntry[]>(() => {
     try {
+      const savedDeleted = localStorage.getItem(STORAGE_KEY_DELETED_DATES);
+      const delSet = savedDeleted ? new Set<string>(JSON.parse(savedDeleted)) : new Set<string>();
+
       const saved = localStorage.getItem(STORAGE_KEY_DAILY_MENUS) || localStorage.getItem('school_lunch_daily_menus_v1');
       if (saved) {
         const parsed: DailyMenuEntry[] = JSON.parse(saved);
-        return parsed.map((item) => ({ ...item, photos: item.photos || [] }));
+        return parsed
+          .filter((item) => item && item.date && !delSet.has(item.date.trim().slice(0, 10)))
+          .map((item) => ({ ...item, photos: item.photos || [] }));
       }
-      return INITIAL_DAILY_MENUS;
+      return INITIAL_DAILY_MENUS.filter((item) => item && item.date && !delSet.has(item.date.trim().slice(0, 10)));
     } catch {
       return INITIAL_DAILY_MENUS;
     }
@@ -295,7 +311,15 @@ export default function App() {
           }
 
           if (Array.isArray(data.dailyMenus)) {
-            setDailyMenus(data.dailyMenus);
+            let currentDel = deletedDates;
+            try {
+              const savedDel = localStorage.getItem(STORAGE_KEY_DELETED_DATES);
+              if (savedDel) currentDel = new Set<string>(JSON.parse(savedDel));
+            } catch {}
+            const clean = data.dailyMenus.filter(
+              (m: DailyMenuEntry) => m && m.date && !currentDel.has(m.date.trim().slice(0, 10))
+            );
+            setDailyMenus(clean);
           }
 
           if (Array.isArray(data.taxRecords)) {
@@ -398,14 +422,28 @@ export default function App() {
   // -------------------------------------------------------------
   const handleSaveDailyMenu = async (entry: DailyMenuEntry): Promise<boolean> => {
     lastLocalSaveTimeRef.current = Date.now();
-    const existingIndex = dailyMenus.findIndex((m) => m.date === entry.date);
+    const cleanDate = entry.date.trim().slice(0, 10);
+    const cleanEntry = { ...entry, date: cleanDate };
+
+    // ปลดล็อควันที่นี้ออกจากรายการที่เคยถูกลบ เพื่อให้บันทึกหรือสุ่มใหม่ได้สำเร็จ
+    setDeletedDates((prev) => {
+      if (!prev.has(cleanDate)) return prev;
+      const next = new Set(prev);
+      next.delete(cleanDate);
+      try {
+        localStorage.setItem(STORAGE_KEY_DELETED_DATES, JSON.stringify(Array.from(next)));
+      } catch (e) {}
+      return next;
+    });
+
+    const existingIndex = dailyMenus.findIndex((m) => m.date === cleanDate);
     let updated: DailyMenuEntry[];
 
     if (existingIndex >= 0) {
       updated = [...dailyMenus];
-      updated[existingIndex] = entry;
+      updated[existingIndex] = cleanEntry;
     } else {
-      updated = [...dailyMenus, entry];
+      updated = [...dailyMenus, cleanEntry];
       updated.sort((a, b) => a.date.localeCompare(b.date));
     }
 
@@ -417,7 +455,7 @@ export default function App() {
     }
 
     // ซิงค์เฉพาะวันที่บันทึกไปยัง Google Sheets ใน ~300ms แทนการวนลูปทั้งเดือน
-    saveSingleDailyMenuDirect(entry, settings.gasWebAppUrl);
+    saveSingleDailyMenuDirect(cleanEntry, settings.gasWebAppUrl);
     const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
     if (saveRes && saveRes.lastUpdated) {
       lastServerTimestampRef.current = saveRes.lastUpdated;
@@ -435,6 +473,17 @@ export default function App() {
         setActiveReportMonth(m);
       }
     }
+
+    // ปลดล็อควันที่ทั้งหมดในชุดที่เพิ่งสุ่มหรือบันทึกใหม่ออกจาก deletedDates
+    const incomingDates = new Set(entries.map((e) => e.date.trim().slice(0, 10)));
+    setDeletedDates((prev) => {
+      const next = new Set(prev);
+      incomingDates.forEach((d) => next.delete(d));
+      try {
+        localStorage.setItem(STORAGE_KEY_DELETED_DATES, JSON.stringify(Array.from(next)));
+      } catch (e) {}
+      return next;
+    });
 
     // กำหนดกลุ่มเดือนที่มีการสุ่มหรือบันทึกใหม่
     // แทนที่รายการของเดือนนั้นทั้งหมด เพื่อล้างข้อมูลวันที่ตกค้าง วันที่ซ้ำ หรือข้อมูลเก่าให้สะอาดหมดจด
@@ -486,7 +535,15 @@ export default function App() {
       if (data && data.success) {
         if (data.settings) setSettings((p) => ({ ...p, ...data.settings }));
         if (data.menuBank) setMenuBank(data.menuBank);
-        if (data.dailyMenus) setDailyMenus(data.dailyMenus);
+        if (data.dailyMenus) {
+          let currentDel = deletedDates;
+          try {
+            const savedDel = localStorage.getItem(STORAGE_KEY_DELETED_DATES);
+            if (savedDel) currentDel = new Set<string>(JSON.parse(savedDel));
+          } catch {}
+          const clean = data.dailyMenus.filter((m: DailyMenuEntry) => m && m.date && !currentDel.has(m.date.trim().slice(0, 10)));
+          setDailyMenus(clean);
+        }
         if (data.taxRecords) setTaxRecords(data.taxRecords);
         showToast('ซิงค์ข้อมูลสำเร็จ', 'ข้อมูลล่าสุดตรงกันทุกอุปกรณ์แล้ว', 'success');
       } else {
@@ -501,25 +558,45 @@ export default function App() {
 
   const handleDeleteDailyMenu = async (dateStr: string) => {
     lastLocalSaveTimeRef.current = Date.now();
-    const updated = dailyMenus.filter((m) => m.date !== dateStr);
+    const cleanDate = dateStr.trim().slice(0, 10);
+
+    // 1. บันทึกลงรายการวันที่ถูกลบอย่างถาวรใน client cache
+    setDeletedDates((prev) => {
+      const next = new Set(prev);
+      next.add(cleanDate);
+      try {
+        localStorage.setItem(STORAGE_KEY_DELETED_DATES, JSON.stringify(Array.from(next)));
+      } catch (e) {
+        console.error('Storage error', e);
+      }
+      return next;
+    });
+
+    // 2. ลบออกจาก dailyMenus
+    const updated = dailyMenus.filter((m) => m.date !== cleanDate);
     setDailyMenus(updated);
     try {
       localStorage.setItem(STORAGE_KEY_DAILY_MENUS, JSON.stringify(updated));
     } catch (e) {
       console.error('Storage error', e);
     }
-    showToast('ลบข้อมูลเรียบร้อย', `ลบเมนูวันที่ ${dateStr} แล้ว`, 'info');
+    showToast('ลบข้อมูลเรียบร้อย', `ลบเมนูวันที่ ${cleanDate} แล้ว`, 'info');
 
-    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+    // 3. ส่งคำสั่งลบถาวรไปยัง Express backend
+    deleteDailyMenuFromServer(cleanDate);
+
+    // 4. บันทึกข้อมูลและส่ง deletedDates
+    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, deletedDates: [cleanDate], syncToGas: true });
     if (saveRes && saveRes.lastUpdated) {
       lastServerTimestampRef.current = saveRes.lastUpdated;
     }
 
+    // 5. ส่งคำสั่งลบตรงไปยัง Google Apps Script Web App
     if (settings.gasWebAppUrl) {
       try {
         await callGasPost(settings.gasWebAppUrl, {
           action: 'deleteDailyMenu',
-          date: dateStr
+          date: cleanDate
         });
       } catch (err) {
         console.warn('GAS deleteDailyMenu warning:', err);
@@ -530,7 +607,22 @@ export default function App() {
   const handleBatchDeleteDailyMenus = async (dates: string[]) => {
     if (dates.length === 0) return;
     lastLocalSaveTimeRef.current = Date.now();
-    const dateSet = new Set(dates);
+    const cleanDates = dates.map((d) => d.trim().slice(0, 10));
+    const dateSet = new Set(cleanDates);
+
+    // 1. บันทึกลงรายการวันที่ถูกลบอย่างถาวรใน client cache
+    setDeletedDates((prev) => {
+      const next = new Set(prev);
+      cleanDates.forEach((d) => next.add(d));
+      try {
+        localStorage.setItem(STORAGE_KEY_DELETED_DATES, JSON.stringify(Array.from(next)));
+      } catch (e) {
+        console.error('Storage error', e);
+      }
+      return next;
+    });
+
+    // 2. ลบออกจาก dailyMenus
     const updated = dailyMenus.filter((m) => !dateSet.has(m.date));
     setDailyMenus(updated);
     try {
@@ -540,11 +632,16 @@ export default function App() {
     }
     showToast('ลบข้อมูลเรียบร้อย', `ลบรายการอาหารที่เลือกจำนวน ${dates.length} วันแล้ว`, 'info');
 
-    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+    // 3. ส่งคำสั่งลบถาวรไปยัง Express backend
+    deleteDailyMenuFromServer(cleanDates);
+
+    // 4. บันทึกข้อมูลและส่ง deletedDates
+    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, deletedDates: cleanDates, syncToGas: true });
     if (saveRes && saveRes.lastUpdated) {
       lastServerTimestampRef.current = saveRes.lastUpdated;
     }
 
+    // 5. ส่งคำสั่งซิงค์ตรงไปยัง Google Apps Script
     if (settings.gasWebAppUrl) {
       try {
         await callGasPost(settings.gasWebAppUrl, {
