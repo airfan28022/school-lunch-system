@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { DailyMenuEntry, SchoolSettings, MenuItem } from '../types';
+import { DailyMenuEntry, SchoolSettings, MenuItem, cleanDailyMenuEntry } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { generateMonthlyMenu } from '../services/menuRandomizer';
 import { 
@@ -440,7 +440,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
       if (item && item.date) {
         const cleanDate = item.date.trim().slice(0, 10);
         if (cleanDate.startsWith(monthKey) && /^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
-          map.set(cleanDate, { ...item, date: cleanDate });
+          map.set(cleanDate, cleanDailyMenuEntry({ ...item, date: cleanDate }));
         }
       }
     });

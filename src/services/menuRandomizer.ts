@@ -86,9 +86,8 @@ export function generateMonthlyMenu(
       const alt = sourceBank.filter((m) => m.category === 'อาหารเผ็ด' || m.category === 'อาหารจานเดียว');
       if (alt.length > 0) return alt;
     } else if (category === 'ข้าว') {
-      const alt = sourceBank.filter((m) => m.menuName.includes('ข้าว'));
-      if (alt.length > 0) return alt;
-      return [{ id: 'rice_default', category: 'ข้าว', menuName: 'ข้าวสวย', createdAt: '' }];
+      const alt = sourceBank.filter((m) => m.category === 'ข้าว' || m.menuName.includes('ข้าว'));
+      return alt;
     }
 
     return fromBank;

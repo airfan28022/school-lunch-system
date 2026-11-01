@@ -50,6 +50,51 @@ const STORAGE_KEY_LAST_ACTIVITY = 'school_lunch_last_activity_v1';
 // กำหนดระยะเวลาหยุดไม่ขยับหน้าจอ: 30 นาที (30 x 60 x 1000 มิลลิวินาที)
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 
+// Known legacy template dummy dishes that do NOT exist in the user's menuBank
+const FORBIDDEN_DUMMY_DISHES = new Set([
+  'ข้าวสวยหอมมะลิใหม่',
+  'ข้าวกล้องเกษตรอินทรีย์หอมนุ่ม',
+  'ข้าวกล้องเกษตรอินทรีย์',
+  'ข้าวสวยหอมมะลิ',
+  'ข้าวมันไก่ตอนสูตรอนามัย น้ำซุปฟักหวาน',
+  'ก๋วยเตี๋ยวเส้นหมี่น้ำใสลูกชิ้นปลาหมูสับ',
+  'ก๋วยเตี๋ยวหมูสับน้ำใส ลูกชิ้นปลา',
+  'ข้าวมันไก่ต้ม พร้อมน้ำซุปฟัก',
+  'ต้มจืดเต้าหู้หมูสับสาหร่ายวากาเมะแครอท',
+  'ต้มจืดเต้าหู้หมูสับสาหร่ายวากาเมะ',
+  'ไข่พะโล้โบราณหมูสามชั้น เต้าหู้พวง',
+  'ไข่พะโล้หมูสามชั้น เต้าหู้พวง',
+  'แกงเขียวหวานไก่ใส่มะเขือเปราะใบโหระพา',
+  'แกงเขียวหวานไก่ใส่ฟักและมะเขือเปราะ',
+  'ผัดกะเพราหมูสับใบกะเพราบ้าน (เผ็ดน้อยสำหรับเด็ก)',
+  'ผัดกะเพราหมูสับใบกะเพราบ้าน',
+  'กล้วยน้ำว้าอินทรีย์สวนโรงเรียน',
+  'กล้วยน้ำว้าเกษตรอินทรีย์',
+  'แตงโมกินรีหวานฉ่ำหั่นชิ้นพอดีคำ',
+  'แตงโมหวานฉ่ำหั่นชิ้น',
+  'บัวลอยเผือกมะพร้าวอ่อนกะทิสดหวานน้อย',
+  'กล้วยบวชชีงาขาวคั่วหอมกรุ่น',
+  'สับปะรดภูแลหวานกรอบ',
+  'ส้มสายน้ำผึ้งสด',
+  'ผัดซีอิ๊วหมูนุ่มใส่คะน้าฮ่องกง',
+  'ข้าวผัดอเมริกัน น่องไก่ทอด',
+  'แกงจืดฟักเขียวกระดูกหมูเห็ดหอม',
+  'ผัดผักรวมมิตรใส่กุ้งสด',
+  'แกงเผ็ดหมูใส่หน่อไม้สด'
+]);
+
+function cleanDailyEntryDishes(entry: DailyMenuEntry): DailyMenuEntry {
+  if (!entry) return entry;
+  const clean = { ...entry };
+  (['rice', 'singleDish', 'spicy', 'nonSpicy', 'dessert'] as const).forEach((f) => {
+    const val = clean[f];
+    if (val && FORBIDDEN_DUMMY_DISHES.has(val.trim())) {
+      clean[f] = '';
+    }
+  });
+  return clean;
+}
+
 export default function App() {
   // Authentication state (ID: Admin, Password: 1159551)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -144,11 +189,13 @@ export default function App() {
         const parsed: DailyMenuEntry[] = JSON.parse(saved);
         return parsed
           .filter((item) => item && item.date && !delSet.has(item.date.trim().slice(0, 10)))
-          .map((item) => ({ ...item, photos: item.photos || [] }));
+          .map((item) => cleanDailyEntryDishes({ ...item, photos: item.photos || [] }));
       }
-      return INITIAL_DAILY_MENUS.filter((item) => item && item.date && !delSet.has(item.date.trim().slice(0, 10)));
+      return INITIAL_DAILY_MENUS
+        .filter((item) => item && item.date && !delSet.has(item.date.trim().slice(0, 10)))
+        .map(cleanDailyEntryDishes);
     } catch {
-      return INITIAL_DAILY_MENUS;
+      return INITIAL_DAILY_MENUS.map(cleanDailyEntryDishes);
     }
   });
 
@@ -436,12 +483,19 @@ export default function App() {
               const savedDel = localStorage.getItem(STORAGE_KEY_DELETED_DATES);
               if (savedDel) currentDel = new Set<string>(JSON.parse(savedDel));
             } catch {}
-            const clean = data.dailyMenus.filter(
-              (m: DailyMenuEntry) => m && m.date && !currentDel.has(m.date.trim().slice(0, 10))
-            );
-            if (clean.length > 0 || isInitial) {
-              setDailyMenus(clean);
-            }
+            const clean = data.dailyMenus
+              .filter(
+                (m: DailyMenuEntry) => m && m.date && !currentDel.has(m.date.trim().slice(0, 10))
+              )
+              .map(cleanDailyEntryDishes);
+
+            // Compare with current dailyMenus before updating to prevent unexpected mutations and jumping
+            setDailyMenus((prev) => {
+              if (JSON.stringify(prev) === JSON.stringify(clean)) {
+                return prev;
+              }
+              return clean;
+            });
           }
 
           if (Array.isArray(data.taxRecords)) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { DailyMenuEntry, MenuItem, ActivityPhoto, MenuCategory } from '../types';
+import { DailyMenuEntry, MenuItem, ActivityPhoto, MenuCategory, cleanDailyMenuEntry } from '../types';
 import { INITIAL_MENU_BANK } from '../data/initialData';
 import { generateMonthlyMenu } from '../services/menuRandomizer';
 import { ConfirmModal } from './ConfirmModal';
@@ -138,7 +138,8 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
 
   // Load existing menu data whenever selectedDate changes
   useEffect(() => {
-    const existing = dailyMenus.find((m) => m.date === selectedDate);
+    const raw = dailyMenus.find((m) => m.date === selectedDate);
+    const existing = raw ? cleanDailyMenuEntry(raw) : undefined;
     if (existing) {
       setRice(existing.rice || '');
       setSingleDish(existing.singleDish || '');

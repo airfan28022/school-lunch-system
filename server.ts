@@ -12,6 +12,8 @@ const DATA_DIR = fs.existsSync(path.resolve(process.cwd(), 'data'))
   : path.resolve(__dirname, 'data');
 const STORE_PATH = path.resolve(DATA_DIR, 'store.json');
 
+import { INITIAL_MENU_BANK } from './src/data/initialData';
+
 // Default initial data fallback
 const DEFAULT_SETTINGS = {
   schoolName: 'โรงเรียนบ้านนาออก',
@@ -33,6 +35,39 @@ interface StoreData {
   lastUpdated: string;
 }
 
+// Known legacy template dummy dishes that do NOT exist in the user's menuBank
+const FORBIDDEN_DUMMY_DISHES = new Set([
+  'ข้าวสวยหอมมะลิใหม่',
+  'ข้าวกล้องเกษตรอินทรีย์หอมนุ่ม',
+  'ข้าวกล้องเกษตรอินทรีย์',
+  'ข้าวสวยหอมมะลิ',
+  'ข้าวมันไก่ตอนสูตรอนามัย น้ำซุปฟักหวาน',
+  'ก๋วยเตี๋ยวเส้นหมี่น้ำใสลูกชิ้นปลาหมูสับ',
+  'ก๋วยเตี๋ยวหมูสับน้ำใส ลูกชิ้นปลา',
+  'ข้าวมันไก่ต้ม พร้อมน้ำซุปฟัก',
+  'ต้มจืดเต้าหู้หมูสับสาหร่ายวากาเมะแครอท',
+  'ต้มจืดเต้าหู้หมูสับสาหร่ายวากาเมะ',
+  'ไข่พะโล้โบราณหมูสามชั้น เต้าหู้พวง',
+  'ไข่พะโล้หมูสามชั้น เต้าหู้พวง',
+  'แกงเขียวหวานไก่ใส่มะเขือเปราะใบโหระพา',
+  'แกงเขียวหวานไก่ใส่ฟักและมะเขือเปราะ',
+  'ผัดกะเพราหมูสับใบกะเพราบ้าน (เผ็ดน้อยสำหรับเด็ก)',
+  'ผัดกะเพราหมูสับใบกะเพราบ้าน',
+  'กล้วยน้ำว้าอินทรีย์สวนโรงเรียน',
+  'กล้วยน้ำว้าเกษตรอินทรีย์',
+  'แตงโมกินรีหวานฉ่ำหั่นชิ้นพอดีคำ',
+  'แตงโมหวานฉ่ำหั่นชิ้น',
+  'บัวลอยเผือกมะพร้าวอ่อนกะทิสดหวานน้อย',
+  'กล้วยบวชชีงาขาวคั่วหอมกรุ่น',
+  'สับปะรดภูแลหวานกรอบ',
+  'ส้มสายน้ำผึ้งสด',
+  'ผัดซีอิ๊วหมูนุ่มใส่คะน้าฮ่องกง',
+  'ข้าวผัดอเมริกัน น่องไก่ทอด',
+  'แกงจืดฟักเขียวกระดูกหมูเห็ดหอม',
+  'ผัดผักรวมมิตรใส่กุ้งสด',
+  'แกงเผ็ดหมูใส่หน่อไม้สด'
+]);
+
 // Ensure store exists on disk
 function initStore(): StoreData {
   if (!fs.existsSync(DATA_DIR)) {
@@ -45,7 +80,7 @@ function initStore(): StoreData {
       const parsed = JSON.parse(raw);
       return {
         settings: parsed.settings || DEFAULT_SETTINGS,
-        menuBank: parsed.menuBank || [],
+        menuBank: parsed.menuBank || INITIAL_MENU_BANK,
         dailyMenus: parsed.dailyMenus || [],
         taxRecords: parsed.taxRecords || [],
         deletedDates: parsed.deletedDates || [],
@@ -56,36 +91,10 @@ function initStore(): StoreData {
     }
   }
 
-  // Load from initialData if store doesn't exist
-  let initialMenuBank: any[] = [];
-  let initialDailyMenus: any[] = [];
-  try {
-    const initDataPath = path.resolve(__dirname, 'src', 'data', 'initialData.ts');
-    if (fs.existsSync(initDataPath)) {
-      // Basic fallback
-      initialMenuBank = [
-        { id: 'mb-01', category: 'ข้าว', menuName: 'ข้าวสวยหอมมะลิใหม่', createdAt: '2026-09-01' },
-        { id: 'mb-02', category: 'ข้าว', menuName: 'ข้าวกล้องเกษตรอินทรีย์หอมนุ่ม', createdAt: '2026-09-01' },
-        { id: 'mb-05', category: 'อาหารจานเดียว', menuName: 'ข้าวมันไก่ตอนสูตรอนามัย น้ำซุปฟักหวาน', createdAt: '2026-09-01' },
-        { id: 'mb-06', category: 'อาหารจานเดียว', menuName: 'ก๋วยเตี๋ยวเส้นหมี่น้ำใสลูกชิ้นปลาหมูสับ', createdAt: '2026-09-01' },
-        { id: 'mb-11', category: 'อาหารไม่เผ็ด', menuName: 'ต้มจืดเต้าหู้หมูสับสาหร่ายวากาเมะแครอท', createdAt: '2026-09-01' },
-        { id: 'mb-12', category: 'อาหารไม่เผ็ด', menuName: 'ไข่พะโล้โบราณหมูสามชั้น เต้าหู้พวง', createdAt: '2026-09-01' },
-        { id: 'mb-18', category: 'อาหารเผ็ด', menuName: 'แกงเขียวหวานไก่ใส่มะเขือเปราะใบโหระพา', createdAt: '2026-09-01' },
-        { id: 'mb-19', category: 'อาหารเผ็ด', menuName: 'ผัดกะเพราหมูสับใบกะเพราบ้าน (เผ็ดน้อยสำหรับเด็ก)', createdAt: '2026-09-01' },
-        { id: 'mb-23', category: 'ผลไม้', menuName: 'กล้วยน้ำว้าอินทรีย์สวนโรงเรียน', createdAt: '2026-09-01' },
-        { id: 'mb-24', category: 'ผลไม้', menuName: 'แตงโมกินรีหวานฉ่ำหั่นชิ้นพอดีคำ', createdAt: '2026-09-01' },
-        { id: 'mb-26', category: 'ของหวาน', menuName: 'บัวลอยเผือกมะพร้าวอ่อนกะทิสดหวานน้อย', createdAt: '2026-09-01' },
-        { id: 'mb-27', category: 'ของหวาน', menuName: 'กล้วยบวชชีงาขาวคั่วหอมกรุ่น', createdAt: '2026-09-01' }
-      ];
-    }
-  } catch (err) {
-    console.warn('Initial data load warning:', err);
-  }
-
   const initialStore: StoreData = {
     settings: DEFAULT_SETTINGS,
-    menuBank: initialMenuBank,
-    dailyMenus: initialDailyMenus,
+    menuBank: INITIAL_MENU_BANK,
+    dailyMenus: [],
     taxRecords: [],
     deletedDates: [],
     lastUpdated: new Date().toISOString()
@@ -102,7 +111,13 @@ function sanitizeDailyMenus(list: any[]): any[] {
     if (!item || !item.date) return;
     const cleanDate = String(item.date).trim().slice(0, 10);
     if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
-      map.set(cleanDate, { ...item, date: cleanDate });
+      const copy = { ...item, date: cleanDate };
+      ['rice', 'singleDish', 'spicy', 'nonSpicy', 'dessert'].forEach((field) => {
+        if (copy[field] && FORBIDDEN_DUMMY_DISHES.has(String(copy[field]).trim())) {
+          copy[field] = '';
+        }
+      });
+      map.set(cleanDate, copy);
     }
   });
   return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -208,7 +223,7 @@ async function syncFromGas(gasUrl?: string): Promise<boolean> {
         current.menuBank = data.menuBank;
         changed = true;
       }
-      if (Array.isArray(data.dailyMenu) && data.dailyMenu.length > 0) {
+      if (Array.isArray(data.dailyMenu)) {
         const deletedSet = new Set(current.deletedDates || []);
         const sanitized = sanitizeDailyMenus(data.dailyMenu).filter((item) => !deletedSet.has(item.date));
         if (JSON.stringify(sanitized) !== JSON.stringify(current.dailyMenus || [])) {
