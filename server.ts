@@ -173,7 +173,7 @@ async function callGas(url: string, payload: any): Promise<any> {
 let isSyncingGas = false;
 async function syncFromGas(gasUrl?: string): Promise<boolean> {
   if (isSyncingGas) return false;
-  if (Date.now() - lastServerSaveTime < 15000) return false;
+  if (Date.now() - lastServerSaveTime < 45000) return false;
   isSyncingGas = true;
 
   try {
@@ -249,12 +249,12 @@ async function startServer() {
   // Always perform sync from Google Sheets on server startup
   syncFromGas().catch((err) => console.warn('Initial GAS sync notice:', err));
 
-  // Periodic automatic synchronization from Google Sheets (every 25s) across all devices
+  // Periodic automatic synchronization from Google Sheets (every 30s) across all devices
   setInterval(() => {
-    if (Date.now() - lastServerSaveTime > 15000) {
+    if (Date.now() - lastServerSaveTime > 45000) {
       syncFromGas().catch((err) => console.warn('Periodic GAS sync notice:', err));
     }
-  }, 25000);
+  }, 30000);
 
   // -----------------------------------------------------------------
   // 1. GET /api/data - Fetch all synchronized school data
@@ -323,7 +323,7 @@ async function startServer() {
             dailyMenu: current.dailyMenus,
             taxRecords: current.taxRecords || []
           }).catch((e) => console.warn('Background GAS sync warning:', e.message));
-        }, 1200);
+        }, 400);
       }
 
       res.json({

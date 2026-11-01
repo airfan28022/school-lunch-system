@@ -403,7 +403,14 @@ export const DailyMenuPlanner: React.FC<DailyMenuPlannerProps> = ({
 
       // นำมุมมองไปที่วันแรกของเดือนที่สุ่ม และซิงค์เดือนไปยังหน้ารายงาน
       if (generatedEntries.length > 0) {
-        setSelectedDate(generatedEntries[0].date);
+        const first = generatedEntries[0];
+        setSelectedDate(first.date);
+        setRice(first.rice || '');
+        setSingleDish(first.singleDish || '');
+        setSpicy(first.spicy || '');
+        setNonSpicy(first.nonSpicy || '');
+        setDessert(first.dessert || '');
+        setNote(first.note || '');
       }
       if (onActiveMonthYearChange) {
         onActiveMonthYearChange(randomMonth, randomYear);

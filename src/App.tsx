@@ -284,8 +284,8 @@ export default function App() {
 
     const pullServerData = async (isInitial = false) => {
       if (isPulling) return;
-      // ป้องกันการดึงข้อมูลทับข้อมูลที่เพิ่งสุ่มหรือบันทึกใหม่ในเครื่องภายใน 8 วินาที
-      if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 8000) {
+      // ป้องกันการดึงข้อมูลทับข้อมูลที่เพิ่งสุ่มหรือบันทึกใหม่ในเครื่องภายใน 30 วินาที
+      if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 30000) {
         return;
       }
 
@@ -294,6 +294,11 @@ export default function App() {
       try {
         const data = await fetchServerData(settings.gasWebAppUrl);
         if (!isMounted || !data || !data.success) return;
+
+        // ตรวจสอบซ้ำอีกครั้ง: หากระหว่าง fetch ข้อมูลผู้ใช้มีการกดสุ่มหรือบันทึกใหม่ ห้ามเขียนทับข้อมูลใหม่เด็ดขาด
+        if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 30000) {
+          return;
+        }
 
         const shouldUpdate = isInitial || (data.lastUpdated && data.lastUpdated !== lastServerTimestampRef.current);
         if (shouldUpdate) {
@@ -319,7 +324,9 @@ export default function App() {
             const clean = data.dailyMenus.filter(
               (m: DailyMenuEntry) => m && m.date && !currentDel.has(m.date.trim().slice(0, 10))
             );
-            setDailyMenus(clean);
+            if (clean.length > 0 || isInitial) {
+              setDailyMenus(clean);
+            }
           }
 
           if (Array.isArray(data.taxRecords)) {
@@ -457,6 +464,7 @@ export default function App() {
     // ซิงค์เฉพาะวันที่บันทึกไปยัง Google Sheets ใน ~300ms แทนการวนลูปทั้งเดือน
     saveSingleDailyMenuDirect(cleanEntry, settings.gasWebAppUrl);
     const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+    lastLocalSaveTimeRef.current = Date.now();
     if (saveRes && saveRes.lastUpdated) {
       lastServerTimestampRef.current = saveRes.lastUpdated;
     }
@@ -514,13 +522,14 @@ export default function App() {
 
     // ซิงค์ทั้งเดือนด้วย High-speed Batch mode (ครั้งเดียวจบ ไม่วนลูป 20 ครั้ง)
     const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+    lastLocalSaveTimeRef.current = Date.now();
     if (saveRes && saveRes.lastUpdated) {
       lastServerTimestampRef.current = saveRes.lastUpdated;
     }
 
     // ส่งตรงไปยัง Google Apps Script Web App เพื่อให้แน่ใจว่าบันทึกลงชีตทันที
     if (settings.gasWebAppUrl) {
-      queueDirectGasSync(settings.gasWebAppUrl, { settings, menuBank, dailyMenus: updated }, 300);
+      queueDirectGasSync(settings.gasWebAppUrl, { settings, menuBank, dailyMenus: updated }, 100);
     }
 
     return true;

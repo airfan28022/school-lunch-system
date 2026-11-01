@@ -304,7 +304,7 @@ export async function fetchServerData(gasUrlOverride?: string) {
           menuBank: gasData.menuBank,
           dailyMenus: gasData.dailyMenu || gasData.dailyMenus,
           taxRecords: gasData.taxRecords || [],
-          lastUpdated: new Date().toISOString()
+          lastUpdated: gasData.timestamp || gasData.lastUpdated || 'gas_synced'
         };
       }
     } catch (gasErr) {

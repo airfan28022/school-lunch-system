@@ -22,11 +22,12 @@ function shuffle<T>(arr: T[]): T[] {
 
 /**
  * Monthly Menu Randomizer Engine (ระบบสุ่มจัดอาหารกลางวันตามหลักโภชนาการโรงเรียน)
- * 1. ไม่ซ้ำกันในเดือนเดียวกัน: หมุนเวียนคลังเมนูไม่ให้เมนูกับข้าวซ้ำกันตลอดทั้งเดือน
- * 2. สุ่มแต่ละครั้งไม่ซ้ำเดิม: ตรวจสอบเมนูที่มีอยู่เดิมของเดือนนั้น เพื่อให้การกดสุ่มแต่ละครั้งได้เมนูใหม่ที่แตกต่างออกไปเสมอ
- * 3. วันพุธ: อาหารจานเดียว + ขนมหวานหรือผลไม้ (หมุนเวียนไม่ซ้ำกันทุกวันพุธ)
- * 4. วันจันทร์, อังคาร, พฤหัสบดี, ศุกร์: ข้าว + กับข้าวเผ็ด + กับข้าวไม่เผ็ด + ขนมหวานหรือผลไม้
- * 5. ของหวาน: สลับ 1-2 วันต่อสัปดาห์ วันที่เหลือเป็นผลไม้สด
+ * 1. ดึงจาก "คลังเมนู" (menuBank) เท่านั้น ห้ามดึงข้อมูลจากแหล่งอื่นที่ไม่รู้จัก
+ * 2. หมุนเวียนคลังเมนูไม่ให้เมนูกับข้าวซ้ำกันตลอดทั้งเดือน (หากคลังเมนูมีเพียงพอ)
+ * 3. สุ่มแต่ละครั้งไม่ซ้ำเดิม: ตรวจสอบเมนูที่มีอยู่เดิมของเดือนนั้น เพื่อให้การกดสุ่มแต่ละครั้งได้เมนูใหม่ที่แตกต่างออกไปเสมอ
+ * 4. วันพุธ: อาหารจานเดียว + ขนมหวานหรือผลไม้ (หมุนเวียนไม่ซ้ำกันทุกวันพุธ)
+ * 5. วันจันทร์, อังคาร, พฤหัสบดี, ศุกร์: ข้าว + กับข้าวเผ็ด + กับข้าวไม่เผ็ด + ขนมหวานหรือผลไม้
+ * 6. ของหวาน: สลับ 1-2 วันต่อสัปดาห์ วันที่เหลือเป็นผลไม้สด
  */
 export function generateMonthlyMenu(
   randomMonth: number,
@@ -36,6 +37,15 @@ export function generateMonthlyMenu(
 ): DailyMenuEntry[] {
   // รองรับทั้งปี ค.ศ. (เช่น 2026) และปี พ.ศ. (เช่น 2569) ป้องกันการคำนวณวันในสัปดาห์คลาดเคลื่อน
   const normalizedYear = randomYear > 2400 ? randomYear - 543 : randomYear;
+
+  // คัดกรองรายการที่มีชื่อเมนูชัดเจนจากคลังเมนูของผู้ใช้เท่านั้น
+  const safeBank = Array.isArray(menuBank)
+    ? menuBank.filter((m) => m && typeof m.menuName === 'string' && m.menuName.trim().length > 0)
+    : [];
+
+  // กรณีคลังเมนูว่างเปล่าจริงๆ (ผู้ใช้ยังไม่เคยเพิ่มข้อมูล) ให้สำรองจาก INITIAL_MENU_BANK
+  // แต่หากผู้ใช้มีข้อมูลในคลังเมนูแล้ว ต้องดึงจาก safeBank เท่านั้น 100%
+  const sourceBank = safeBank.length > 0 ? safeBank : INITIAL_MENU_BANK;
 
   const isDessertName = (name: string) => {
     const n = name.toLowerCase();
@@ -51,17 +61,37 @@ export function generateMonthlyMenu(
       n.includes('ฟักทองแกงบวด') ||
       n.includes('ทับทิมกรอบ') ||
       n.includes('ไอศกรีม') ||
-      n.includes('ขนม')
+      n.includes('ขนม') ||
+      n.includes('ลอดช่อง') ||
+      n.includes('รวมมิตร')
     );
   };
 
+  // ดึงรายการตามหมวดหมู่จาก sourceBank เท่านั้น
   const getPool = (category: MenuCategory): MenuItem[] => {
-    let fromBank = menuBank.filter((m) => m.category === category);
+    let fromBank = sourceBank.filter((m) => m.category === category);
     if (category === 'ของหวาน' || category === 'ขนมหวาน') {
-      fromBank = menuBank.filter((m) => m.category === 'ของหวาน' || m.category === 'ขนมหวาน');
+      fromBank = sourceBank.filter((m) => m.category === 'ของหวาน' || m.category === 'ขนมหวาน');
     }
     if (fromBank.length > 0) return fromBank;
-    return INITIAL_MENU_BANK.filter((m) => m.category === category);
+
+    // หากหมวดหมู่นี้ในคลังเมนูของผู้ใช้ไม่มีรายการ ให้หาตัวสำรองจากหมวดอาหารอื่นในคลังเมนูเดิมของผู้ใช้เท่านั้น
+    if (category === 'อาหารจานเดียว') {
+      const alt = sourceBank.filter((m) => m.category === 'อาหารไม่เผ็ด' || m.category === 'อาหารเผ็ด');
+      if (alt.length > 0) return alt;
+    } else if (category === 'อาหารเผ็ด') {
+      const alt = sourceBank.filter((m) => m.category === 'อาหารไม่เผ็ด' || m.category === 'อาหารจานเดียว');
+      if (alt.length > 0) return alt;
+    } else if (category === 'อาหารไม่เผ็ด') {
+      const alt = sourceBank.filter((m) => m.category === 'อาหารเผ็ด' || m.category === 'อาหารจานเดียว');
+      if (alt.length > 0) return alt;
+    } else if (category === 'ข้าว') {
+      const alt = sourceBank.filter((m) => m.menuName.includes('ข้าว'));
+      if (alt.length > 0) return alt;
+      return [{ id: 'rice_default', category: 'ข้าว', menuName: 'ข้าวสวย', createdAt: '' }];
+    }
+
+    return fromBank;
   };
 
   const riceItems = getPool('ข้าว');
@@ -69,16 +99,16 @@ export function generateMonthlyMenu(
   const nonSpicyItems = getPool('อาหารไม่เผ็ด');
   const spicyItems = getPool('อาหารเผ็ด');
 
-  const fruitBank = menuBank.filter(
+  const fruitBank = sourceBank.filter(
     (m) => m.category === 'ผลไม้' || (m.category === 'ผลไม้-ของหวาน' && !isDessertName(m.menuName))
   );
-  const fruitItems = fruitBank.length > 0 ? fruitBank : INITIAL_MENU_BANK.filter((m) => m.category === 'ผลไม้');
-
-  const dessertBank = menuBank.filter(
+  const dessertBank = sourceBank.filter(
     (m) => m.category === 'ของหวาน' || m.category === 'ขนมหวาน' || (m.category === 'ผลไม้-ของหวาน' && isDessertName(m.menuName))
   );
-  const dessertItems =
-    dessertBank.length > 0 ? dessertBank : INITIAL_MENU_BANK.filter((m) => m.category === 'ของหวาน' || m.category === 'ขนมหวาน');
+
+  // ผลไม้และของหวาน หากหมวดใดไม่มีในคลัง ให้สลับใช้อีกหมวดจากคลังเมนูของผู้ใช้
+  const fruitItems = fruitBank.length > 0 ? fruitBank : (dessertBank.length > 0 ? dessertBank : sourceBank);
+  const dessertItems = dessertBank.length > 0 ? dessertBank : (fruitBank.length > 0 ? fruitBank : sourceBank);
 
   // ตรวจสอบเมนูที่มีอยู่เดิมของเดือนนี้ เพื่อให้การสุ่มใหม่แต่ละครั้ง "ไม่ซ้ำเดิม" กับที่มีอยู่
   const currentMonthPrefix = `${normalizedYear}-${String(randomMonth).padStart(2, '0')}`;
@@ -124,7 +154,7 @@ export function generateMonthlyMenu(
    * ฟังก์ชันเลือกเมนูแบบรับประกันไม่ซ้ำกัน:
    * 1. ไม่ซ้ำในเดือนเดียวกัน (ถ้าคลังเมนูมีเพียงพอ)
    * 2. ไม่ซ้ำในสัปดาห์เดียวกัน
-   * 3. ไม่ซ้ำกับเมนูเดิมที่มีอยู่ก่อนกดสุ่มรอบนี้
+   * 3. ไม่ซ้ำกับเมนูเดิมที่มีอยู่ก่อนกดสุ่มรอบนี้ (สุ่มแต่ละครั้งเมนูจะไม่ซ้ำเดิม)
    */
   const pickDiverseItem = (
     pool: MenuItem[],
