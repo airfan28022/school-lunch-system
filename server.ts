@@ -188,7 +188,7 @@ async function callGas(url: string, payload: any): Promise<any> {
 let isSyncingGas = false;
 async function syncFromGas(gasUrl?: string): Promise<boolean> {
   if (isSyncingGas) return false;
-  if (Date.now() - lastServerSaveTime < 45000) return false;
+  if (Date.now() - lastServerSaveTime < 60000) return false;
   isSyncingGas = true;
 
   try {
@@ -226,9 +226,12 @@ async function syncFromGas(gasUrl?: string): Promise<boolean> {
       if (Array.isArray(data.dailyMenu)) {
         const deletedSet = new Set(current.deletedDates || []);
         const sanitized = sanitizeDailyMenus(data.dailyMenu).filter((item) => !deletedSet.has(item.date));
-        if (JSON.stringify(sanitized) !== JSON.stringify(current.dailyMenus || [])) {
-          current.dailyMenus = sanitized;
-          changed = true;
+        // Protect local store: never overwrite non-empty dailyMenus with empty list from GAS
+        if (sanitized.length > 0 || (current.dailyMenus || []).length === 0) {
+          if (JSON.stringify(sanitized) !== JSON.stringify(current.dailyMenus || [])) {
+            current.dailyMenus = sanitized;
+            changed = true;
+          }
         }
       }
       if (Array.isArray(data.taxRecords) && data.taxRecords.length > 0) {

@@ -446,8 +446,8 @@ export default function App() {
 
     const pullServerData = async (isInitial = false) => {
       if (isPulling) return;
-      // ป้องกันการดึงข้อมูลทับข้อมูลที่เพิ่งสุ่มหรือบันทึกใหม่ในเครื่องภายใน 30 วินาที
-      if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 30000) {
+      // ป้องกันการดึงข้อมูลทับข้อมูลที่เพิ่งสุ่มหรือบันทึกใหม่ในเครื่องภายใน 60 วินาที
+      if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 60000) {
         return;
       }
 
@@ -458,7 +458,7 @@ export default function App() {
         if (!isMounted || !data || !data.success) return;
 
         // ตรวจสอบซ้ำอีกครั้ง: หากระหว่าง fetch ข้อมูลผู้ใช้มีการกดสุ่มหรือบันทึกใหม่ ห้ามเขียนทับข้อมูลใหม่เด็ดขาด
-        if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 30000) {
+        if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 60000) {
           return;
         }
 
@@ -491,6 +491,10 @@ export default function App() {
 
             // Compare with current dailyMenus before updating to prevent unexpected mutations and jumping
             setDailyMenus((prev) => {
+              // CRITICAL GUARD: If incoming clean list from server is empty BUT local state has items, do NOT wipe out local items!
+              if (clean.length === 0 && prev.length > 0) {
+                return prev;
+              }
               if (JSON.stringify(prev) === JSON.stringify(clean)) {
                 return prev;
               }
