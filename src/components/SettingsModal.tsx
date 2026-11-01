@@ -10,9 +10,13 @@ import {
   CheckCircle,
   RefreshCw,
   ShieldCheck,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Copy,
+  Download,
+  FileCode
 } from 'lucide-react';
 import { MenuRepository } from './MenuRepository';
+import { copyGasCodeToClipboard, downloadGasCodeFile } from '../services/gasCode';
 
 interface SettingsModalProps {
   settings: SchoolSettings;
@@ -142,6 +146,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleRemoveLogo = () => {
     setLogoUrl('');
     showToast('รีเซ็ตโลโก้', 'ใช้ตราสัญลักษณ์เริ่มต้นของระบบแล้ว', 'info');
+  };
+
+  const handleCopyCode = async () => {
+    const ok = await copyGasCodeToClipboard();
+    if (ok) {
+      showToast('คัดลอกโค้ดสำเร็จ!', 'คัดลอกโค้ด Code.gs (Web Sync Only) ลงคลิปบอร์ดแล้ว นำไปวางใน Google Apps Script ได้ทันที', 'success');
+    } else {
+      showToast('ไม่สามารถคัดลอกได้', 'โปรดกดปุ่มดาวน์โหลดไฟล์ Code.gs แทน', 'warning');
+    }
+  };
+
+  const handleDownloadCode = () => {
+    downloadGasCodeFile();
+    showToast('เริ่มดาวน์โหลดไฟล์แล้ว', 'ดาวน์โหลดไฟล์ Code.gs (Web Sync Only) เรียบร้อยแล้ว', 'success');
   };
 
   return (
@@ -379,6 +397,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
 
 
+
+            {/* Google Apps Script (Code.gs) Synchronizer Card */}
+            <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-r from-amber-50/80 via-orange-50/60 to-amber-50/50 p-4 sm:p-4.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center shrink-0 shadow-2xs">
+                    <FileCode className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <span>โค้ด Google Apps Script (Code.gs ฉบับใหม่)</span>
+                      <span className="text-[10px] bg-amber-200/80 text-amber-950 px-2 py-0.5 rounded-full font-extrabold border border-amber-300">
+                        v4.0.0 Web Sync Only
+                      </span>
+                    </h4>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      นำโค้ดนี้ไปวางใน Google Apps Script เพื่อดึงและจัดเก็บเฉพาะข้อมูลที่จัดการบนเว็ปนี้เท่านั้น (ไม่มีเมนูแปลกปลอม)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    id="btn-copy-code-gs"
+                    onClick={handleCopyCode}
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-800 border border-slate-300 rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer active:scale-[0.98]"
+                    title="คัดลอกโค้ด Code.gs ทั้งหมดลงคลิปบอร์ด"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-amber-600" />
+                    <span>คัดลอกโค้ด</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="btn-download-code-gs"
+                    onClick={handleDownloadCode}
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs cursor-pointer active:scale-[0.98]"
+                    title="ดาวน์โหลดไฟล์ Code.gs"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>ดาวน์โหลดไฟล์</span>
+                  </button>
+                </div>
+              </div>
+            </div>
 
             {/* Submit Button */}
             <div className="pt-3 border-t border-slate-100 flex items-center justify-between">

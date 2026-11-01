@@ -247,6 +247,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
             <div className="text-[10px] text-slate-400 font-mono">
               รหัสเริ่มต้น: ID = <span className="font-bold text-slate-600">Admin</span> | Password = <span className="font-bold text-slate-600">1159551</span>
             </div>
+            <div className="text-[10px] text-amber-600/80 font-medium">
+              * ออกจากระบบอัตโนมัติหากหน้าจอหยุดไม่ขยับเกิน 30 นาที เพื่อความปลอดภัย
+            </div>
           </div>
         </div>
 

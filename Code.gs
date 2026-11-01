@@ -26,7 +26,7 @@
 
 // รหัสโฟลเดอร์ Google Drive สำหรับจัดเก็บรูปภาพ (กำหนดเองหรือปล่อยว่างให้สร้างอัตโนมัติ)
 const DEFAULT_PARENT_FOLDER_ID = '13hIUaTSAcZgA_smhKD6PSjuXwkr4ZsiI';
-const SCRIPT_VERSION = '3.0.0-PRO-SPEED-SECURE';
+const SCRIPT_VERSION = '4.0.0-PRO-WEB-SYNC-ONLY';
 
 /**
  * -------------------------------------------------------------
@@ -311,9 +311,9 @@ function initSheetsStructure(ss, forceFormat) {
     const defaultSettings = [
       ['schoolName', 'โรงเรียนบ้านนาออก', new Date()],
       ['department', 'สังกัดสำนักงานเขตพื้นที่ประถมศึกษากระบี่', new Date()],
-      ['managerName', 'นางสาวมาลี วงศ์สว่าง (หัวหน้างานโภชนาการ)', new Date()],
-      ['directorName', 'นายสมเกียรติ สุขเกษม (ผู้อำนวยการโรงเรียน)', new Date()],
-      ['logoUrl', 'https://lh3.googleusercontent.com/d/1tJ0PObYNbFQy_N59gj0ZKWkYLN-7a96n', new Date()],
+      ['managerName', '-', new Date()],
+      ['directorName', '-', new Date()],
+      ['logoUrl', '/app-logo.png', new Date()],
       ['systemVersion', SCRIPT_VERSION, new Date()]
     ];
     sheetSettings.getRange(2, 1, defaultSettings.length, 3).setValues(defaultSettings);
@@ -324,35 +324,12 @@ function initSheetsStructure(ss, forceFormat) {
     formatHeaderRow(sheetSettings, 3, '#0f172a', HEADER_COLOR);
   }
 
-  // 2. ชีต MenuBank
+  // 2. ชีต MenuBank (คลังเมนูอาหาร - ดึงและบันทึกเฉพาะจากเว็ปไซต์นี้เท่านั้น ไม่ใส่เมนูตัวอย่าง)
   let sheetMenuBank = ss.getSheetByName('MenuBank');
   if (!sheetMenuBank) {
     sheetMenuBank = ss.insertSheet('MenuBank');
     sheetMenuBank.appendRow(['ID', 'Category', 'MenuName', 'CreatedAt']);
     formatHeaderRow(sheetMenuBank, 4, '#047857', HEADER_COLOR); // Emerald
-
-    const defaultMenus = [
-      ['MB01', 'ข้าว', 'ข้าวสวยหอมมะลิใหม่', new Date()],
-      ['MB02', 'ข้าว', 'ข้าวกล้องเกษตรอินทรีย์หอมนุ่ม', new Date()],
-      ['MB03', 'ข้าว', 'ข้าวไรซ์เบอร์รี่', new Date()],
-      ['MB04', 'อาหารจานเดียว', 'ข้าวมันไก่ตอนสูตรอนามัย น้ำซุปฟักหวาน', new Date()],
-      ['MB05', 'อาหารจานเดียว', 'ก๋วยเตี๋ยวเส้นหมี่น้ำใสลูกชิ้นปลาหมูสับ', new Date()],
-      ['MB06', 'อาหารจานเดียว', 'ข้าวผัดอเมริกัน น่องไก่ทอด', new Date()],
-      ['MB07', 'อาหารจานเดียว', 'ผัดซีอิ๊วหมูนุ่มใส่คะน้าฮ่องกง', new Date()],
-      ['MB08', 'อาหารไม่เผ็ด', 'ต้มจืดเต้าหู้หมูสับสาหร่ายวากาเมะ', new Date()],
-      ['MB09', 'อาหารไม่เผ็ด', 'ไข่พะโล้หมูสามชั้น เต้าหู้พวง', new Date()],
-      ['MB10', 'อาหารไม่เผ็ด', 'ผัดผักรวมมิตรใส่กุ้งสด', new Date()],
-      ['MB11', 'อาหารไม่เผ็ด', 'แกงจืดฟักเขียวกระดูกหมูเห็ดหอม', new Date()],
-      ['MB12', 'อาหารเผ็ด', 'แกงเขียวหวานไก่ใส่ฟักและมะเขือเปราะ', new Date()],
-      ['MB13', 'อาหารเผ็ด', 'ผัดกะเพราหมูสับใบกะเพราบ้าน', new Date()],
-      ['MB14', 'อาหารเผ็ด', 'แกงเผ็ดหมูใส่หน่อไม้สด', new Date()],
-      ['MB15', 'ผลไม้', 'กล้วยน้ำว้าเกษตรอินทรีย์', new Date()],
-      ['MB16', 'ผลไม้', 'แตงโมหวานฉ่ำหั่นชิ้น', new Date()],
-      ['MB17', 'ผลไม้', 'สับปะรดภูแลหวานกรอบ', new Date()],
-      ['MB18', 'ขนมหวาน', 'บัวลอยเผือกมะพร้าวอ่อนกะทิสด', new Date()],
-      ['MB19', 'ขนมหวาน', 'กล้วยบวชชีงาขาวคั่ว', new Date()]
-    ];
-    sheetMenuBank.getRange(2, 1, defaultMenus.length, 4).setValues(defaultMenus);
     sheetMenuBank.setColumnWidth(1, 100);
     sheetMenuBank.setColumnWidth(2, 140);
     sheetMenuBank.setColumnWidth(3, 300);

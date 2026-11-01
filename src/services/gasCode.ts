@@ -1,6 +1,6 @@
 /**
  * โค้ดต้นฉบับ Google Apps Script (Code.gs) ฉบับความเร็วและความปลอดภัยสูงสุด (Speed & Enterprise Security Edition)
- * สำหรับแสดง คัดลอก และดาวน์โหลดในระบบหลังบ้าน (Admin Settings)
+ * สำหรับซิงค์ข้อมูลกับเว็ปไซต์นี้โดยเฉพาะ (Web Sync Only Edition v4.0.0)
  */
 export const FULL_CODE_GS = `/**
  * =========================================================================
@@ -30,7 +30,7 @@ export const FULL_CODE_GS = `/**
 
 // รหัสโฟลเดอร์ Google Drive สำหรับจัดเก็บรูปภาพ (กำหนดเองหรือปล่อยว่างให้สร้างอัตโนมัติ)
 const DEFAULT_PARENT_FOLDER_ID = '13hIUaTSAcZgA_smhKD6PSjuXwkr4ZsiI';
-const SCRIPT_VERSION = '3.0.0-PRO-SPEED-SECURE';
+const SCRIPT_VERSION = '4.0.0-PRO-WEB-SYNC-ONLY';
 
 /**
  * -------------------------------------------------------------
@@ -300,6 +300,7 @@ function getOrCreateSpreadsheet() {
  * 4. TaxRecords (บันทึกภาษี 1% และงวดเบิกจ่าย)
  */
 function initSheetsStructure(ss, forceFormat) {
+  // สีธีมหัวตาราง: Dark Slate หรูหรา ชัดเจน สบายตา
   const HEADER_BG = '#1e293b';
   const HEADER_COLOR = '#ffffff';
 
@@ -314,9 +315,9 @@ function initSheetsStructure(ss, forceFormat) {
     const defaultSettings = [
       ['schoolName', 'โรงเรียนบ้านนาออก', new Date()],
       ['department', 'สังกัดสำนักงานเขตพื้นที่ประถมศึกษากระบี่', new Date()],
-      ['managerName', 'นางสาวมาลี วงศ์สว่าง (หัวหน้างานโภชนาการ)', new Date()],
-      ['directorName', 'นายสมเกียรติ สุขเกษม (ผู้อำนวยการโรงเรียน)', new Date()],
-      ['logoUrl', 'https://lh3.googleusercontent.com/d/1tJ0PObYNbFQy_N59gj0ZKWkYLN-7a96n', new Date()],
+      ['managerName', '-', new Date()],
+      ['directorName', '-', new Date()],
+      ['logoUrl', '/app-logo.png', new Date()],
       ['systemVersion', SCRIPT_VERSION, new Date()]
     ];
     sheetSettings.getRange(2, 1, defaultSettings.length, 3).setValues(defaultSettings);
@@ -327,35 +328,12 @@ function initSheetsStructure(ss, forceFormat) {
     formatHeaderRow(sheetSettings, 3, '#0f172a', HEADER_COLOR);
   }
 
-  // 2. ชีต MenuBank
+  // 2. ชีต MenuBank (คลังเมนูอาหาร - ดึงและบันทึกเฉพาะจากเว็ปไซต์นี้เท่านั้น ไม่ใส่เมนูตัวอย่าง)
   let sheetMenuBank = ss.getSheetByName('MenuBank');
   if (!sheetMenuBank) {
     sheetMenuBank = ss.insertSheet('MenuBank');
     sheetMenuBank.appendRow(['ID', 'Category', 'MenuName', 'CreatedAt']);
-    formatHeaderRow(sheetMenuBank, 4, '#047857', HEADER_COLOR);
-
-    const defaultMenus = [
-      ['MB01', 'ข้าว', 'ข้าวสวยหอมมะลิใหม่', new Date()],
-      ['MB02', 'ข้าว', 'ข้าวกล้องเกษตรอินทรีย์หอมนุ่ม', new Date()],
-      ['MB03', 'ข้าว', 'ข้าวไรซ์เบอร์รี่', new Date()],
-      ['MB04', 'อาหารจานเดียว', 'ข้าวมันไก่ตอนสูตรอนามัย น้ำซุปฟักหวาน', new Date()],
-      ['MB05', 'อาหารจานเดียว', 'ก๋วยเตี๋ยวเส้นหมี่น้ำใสลูกชิ้นปลาหมูสับ', new Date()],
-      ['MB06', 'อาหารจานเดียว', 'ข้าวผัดอเมริกัน น่องไก่ทอด', new Date()],
-      ['MB07', 'อาหารจานเดียว', 'ผัดซีอิ๊วหมูนุ่มใส่คะน้าฮ่องกง', new Date()],
-      ['MB08', 'อาหารไม่เผ็ด', 'ต้มจืดเต้าหู้หมูสับสาหร่ายวากาเมะ', new Date()],
-      ['MB09', 'อาหารไม่เผ็ด', 'ไข่พะโล้หมูสามชั้น เต้าหู้พวง', new Date()],
-      ['MB10', 'อาหารไม่เผ็ด', 'ผัดผักรวมมิตรใส่กุ้งสด', new Date()],
-      ['MB11', 'อาหารไม่เผ็ด', 'แกงจืดฟักเขียวกระดูกหมูเห็ดหอม', new Date()],
-      ['MB12', 'อาหารเผ็ด', 'แกงเขียวหวานไก่ใส่ฟักและมะเขือเปราะ', new Date()],
-      ['MB13', 'อาหารเผ็ด', 'ผัดกะเพราหมูสับใบกะเพราบ้าน', new Date()],
-      ['MB14', 'อาหารเผ็ด', 'แกงเผ็ดหมูใส่หน่อไม้สด', new Date()],
-      ['MB15', 'ผลไม้', 'กล้วยน้ำว้าเกษตรอินทรีย์', new Date()],
-      ['MB16', 'ผลไม้', 'แตงโมหวานฉ่ำหั่นชิ้น', new Date()],
-      ['MB17', 'ผลไม้', 'สับปะรดภูแลหวานกรอบ', new Date()],
-      ['MB18', 'ขนมหวาน', 'บัวลอยเผือกมะพร้าวอ่อนกะทิสด', new Date()],
-      ['MB19', 'ขนมหวาน', 'กล้วยบวชชีงาขาวคั่ว', new Date()]
-    ];
-    sheetMenuBank.getRange(2, 1, defaultMenus.length, 4).setValues(defaultMenus);
+    formatHeaderRow(sheetMenuBank, 4, '#047857', HEADER_COLOR); // Emerald
     sheetMenuBank.setColumnWidth(1, 100);
     sheetMenuBank.setColumnWidth(2, 140);
     sheetMenuBank.setColumnWidth(3, 300);
@@ -381,7 +359,7 @@ function initSheetsStructure(ss, forceFormat) {
       'UpdatedBy',     // J: ผู้แก้ไขล่าสุด
       'LastModified'   // K: วันที่อัปเดต
     ]);
-    formatHeaderRow(sheetDaily, 11, '#0284c7', HEADER_COLOR);
+    formatHeaderRow(sheetDaily, 11, '#0284c7', HEADER_COLOR); // Sky Blue
     sheetDaily.setColumnWidth(1, 120);
     sheetDaily.setColumnWidth(2, 150);
     sheetDaily.setColumnWidth(3, 180);
@@ -417,7 +395,7 @@ function initSheetsStructure(ss, forceFormat) {
       'Note',            // M: หมายเหตุงวด
       'CreatedAt'        // N: วันที่สร้างรายการ
     ]);
-    formatHeaderRow(sheetTax, 14, '#b45309', HEADER_COLOR);
+    formatHeaderRow(sheetTax, 14, '#b45309', HEADER_COLOR); // Amber / Gold
     sheetTax.setColumnWidth(1, 120);
     sheetTax.setColumnWidth(2, 120);
     sheetTax.setColumnWidth(3, 120);
@@ -497,6 +475,7 @@ function handleImageUpload(payload) {
     ? payload.date 
     : Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
 
+  // ตรวจสอบความปลอดภัย MIME Type อนุญาตเฉพาะรูปภาพ
   if (!isValidImageMime(mimeType)) {
     return { status: 'error', message: 'ความปลอดภัย: อนุญาตเฉพาะไฟล์รูปภาพ (JPEG, PNG, WebP, SVG, GIF)' };
   }
@@ -507,6 +486,7 @@ function handleImageUpload(payload) {
 
   const parentFolder = getOrCreateParentFolder();
   const targetFolderName = activityName + '_' + dateStr;
+  let targetFolder;
   const subFolders = parentFolder.getFoldersByName(targetFolderName);
   if (subFolders.hasNext()) {
     targetFolder = subFolders.next();
@@ -596,6 +576,7 @@ function handleLogoUploadToDrive(ss, payload) {
   const fileId = file.getId();
   const directUrl = 'https://lh3.googleusercontent.com/d/' + fileId;
 
+  // บันทึกลง Settings Sheet ทันที
   saveSettingsData(ss, { logoUrl: directUrl });
 
   return {
@@ -663,7 +644,7 @@ function saveSettingsData(ss, data) {
   for (let i = 1; i < values.length; i++) {
     const key = String(values[i][0]);
     if (key) {
-      keyRowIndexMap[key] = i + 1;
+      keyRowIndexMap[key] = i + 1; // 1-indexed row
     }
   }
 
@@ -928,6 +909,7 @@ function getTaxRecordsData(ss) {
     });
   }
 
+  // เรียงลำดับจากงวดล่าสุดไปงวดเก่า
   list.sort(function(a, b) {
     return (b.startDate || '').localeCompare(a.startDate || '');
   });
@@ -1146,6 +1128,11 @@ function handleSyncAll(ss, payload) {
  * -------------------------------------------------------------
  */
 
+/**
+ * ป้องกัน Spreadsheet Formula Injection (CWE-1236)
+ * หากค่าข้อความขึ้นต้นด้วย =, +, -, @, \\t, \\r จะทำการเติม ' ข้างหน้า
+ * เพื่อให้ Google Sheets ถือว่าเป็นข้อความธรรมดา ไม่ประมวลผลเป็นสูตรที่เป็นอันตราย
+ */
 function sanitizeSpreadsheetValue(val) {
   if (val === null || val === undefined) return '';
   if (typeof val === 'number' || typeof val === 'boolean') return val;
@@ -1158,20 +1145,32 @@ function sanitizeSpreadsheetValue(val) {
   return str;
 }
 
+/**
+ * ตรวจสอบรูปแบบวันที่ YYYY-MM-DD
+ */
 function isValidDateString(str) {
   return typeof str === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(str.trim());
 }
 
+/**
+ * ตรวจสอบความปลอดภัย MIME Type ของไฟล์ภาพ
+ */
 function isValidImageMime(mime) {
   if (!mime || typeof mime !== 'string') return false;
   return /^(image\\/(jpeg|png|webp|svg\\+xml|gif|jpg))$/i.test(mime.trim());
 }
 
+/**
+ * ทำความสะอาดชื่อไฟล์ ป้องกัน Path Traversal
+ */
 function sanitizeFileName(name) {
   if (!name || typeof name !== 'string') return 'image.jpg';
   return name.replace(/[/\\\\?%*:|"<>]/g, '_').slice(0, 80);
 }
 
+/**
+ * ทำความสะอาดข้อความสำหรับแสดงผล
+ */
 function sanitizeForDisplay(str) {
   if (!str) return '';
   return String(str).replace(/[<>&"']/g, '');
@@ -1182,7 +1181,6 @@ function sanitizeForDisplay(str) {
  * ฟังก์ชันคัดลอกโค้ด Code.gs แบบทนทาน (ทำงานได้แม้ใน iFrame หรือไม่มี clipboard permission)
  */
 export async function copyGasCodeToClipboard(): Promise<boolean> {
-  // วิธีที่ 1: Textarea + execCommand (ทำงานได้ 100% ใน iframe และทุกเบราว์เซอร์)
   try {
     const el = document.createElement('textarea');
     el.value = FULL_CODE_GS;
@@ -1202,7 +1200,6 @@ export async function copyGasCodeToClipboard(): Promise<boolean> {
     console.warn('execCommand copy fallback warning:', err);
   }
 
-  // วิธีที่ 2: Modern Navigator Clipboard
   try {
     if (navigator?.clipboard?.writeText) {
       await navigator.clipboard.writeText(FULL_CODE_GS);
@@ -1219,7 +1216,6 @@ export async function copyGasCodeToClipboard(): Promise<boolean> {
  * ฟังก์ชันดาวน์โหลดไฟล์ Code.gs โดยตรง (รองรับทั้ง Server Route และ Blob Fallback)
  */
 export function downloadGasCodeFile() {
-  // วิธีที่ 1: โหลดผ่าน Server Endpoint โดยตรง (เบราว์เซอร์อนุญาตให้ดาวน์โหลดได้ไม่ถูกบล็อกจาก sandbox iframe)
   try {
     const link = document.createElement('a');
     link.href = '/api/download-code-gs';
@@ -1233,7 +1229,6 @@ export function downloadGasCodeFile() {
     console.warn('Direct server download link click failed:', e);
   }
 
-  // วิธีที่ 2: Fallback ด้วย Data URI
   try {
     const dataUri = 'data:text/plain;charset=utf-8,' + encodeURIComponent(FULL_CODE_GS);
     const a = document.createElement('a');

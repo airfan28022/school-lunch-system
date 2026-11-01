@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   MenuItem, 
   DailyMenuEntry, 
@@ -46,6 +46,9 @@ const STORAGE_KEY_DAILY_MENUS = 'school_lunch_daily_menus_v2';
 const STORAGE_KEY_TAX_RECORDS = 'thai_school_lunch_tax_records_v1';
 const STORAGE_KEY_DELETED_DATES = 'school_lunch_deleted_dates_v1';
 const STORAGE_KEY_AUTH = 'school_lunch_auth';
+const STORAGE_KEY_LAST_ACTIVITY = 'school_lunch_last_activity_v1';
+// กำหนดระยะเวลาหยุดไม่ขยับหน้าจอ: 30 นาที (30 x 60 x 1000 มิลลิวินาที)
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 
 export default function App() {
   // Authentication state (ID: Admin, Password: 1159551)
@@ -54,7 +57,20 @@ export default function App() {
       const savedAuth = localStorage.getItem(STORAGE_KEY_AUTH) || sessionStorage.getItem(STORAGE_KEY_AUTH);
       if (savedAuth) {
         const parsed = JSON.parse(savedAuth);
-        return Boolean(parsed.isAuthenticated);
+        if (parsed.isAuthenticated) {
+          // ตรวจสอบว่าหน้าจอค้างหยุดนิ่งเกิน 30 นาทีหรือไม่
+          const savedLastActivity = localStorage.getItem(STORAGE_KEY_LAST_ACTIVITY);
+          if (savedLastActivity) {
+            const elapsed = Date.now() - Number(savedLastActivity);
+            if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+              localStorage.removeItem(STORAGE_KEY_AUTH);
+              sessionStorage.removeItem(STORAGE_KEY_AUTH);
+              localStorage.removeItem(STORAGE_KEY_LAST_ACTIVITY);
+              return false;
+            }
+          }
+          return true;
+        }
       }
       return false;
     } catch {
@@ -243,6 +259,105 @@ export default function App() {
   const dismissToast = (id: string) => {
     setNotifications((prev) => prev.filter((t) => t.id !== id));
   };
+
+  // -------------------------------------------------------------
+  // Inactivity Auto-Logout Tracker (หยุดไม่ขยับหน้าจอเกิน 30 นาที ให้ออกจากระบบทันที)
+  // -------------------------------------------------------------
+  const lastActivityRef = useRef<number>(Date.now());
+  const lastThrottleStorageRef = useRef<number>(0);
+
+  const handleInactivityLogout = useCallback(() => {
+    try {
+      localStorage.removeItem(STORAGE_KEY_AUTH);
+      sessionStorage.removeItem(STORAGE_KEY_AUTH);
+      localStorage.removeItem(STORAGE_KEY_LAST_ACTIVITY);
+    } catch (e) {
+      console.warn('Inactivity logout storage error:', e);
+    }
+    setIsAuthenticated(false);
+    setShowLogoutConfirm(false);
+    showToast(
+      'ออกจากระบบอัตโนมัติ',
+      'ไม่มีการเคลื่อนไหวหรือใช้งานหน้าจอนานเกิน 30 นาที ระบบได้ออกจากระบบทันทีเพื่อความปลอดภัย',
+      'warning'
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // ตั้งเวลาเริ่มต้นเมื่อเปิดหน้าจอ
+    lastActivityRef.current = Date.now();
+    try {
+      localStorage.setItem(STORAGE_KEY_LAST_ACTIVITY, String(Date.now()));
+    } catch (e) {}
+
+    // อัปเดตเวลากิจกรรมล่าสุดเมื่อผู้ใช้ขยับเมาส์ เลื่อนหน้าจอ สัมผัส หรือกดปุ่ม
+    const recordUserActivity = () => {
+      const now = Date.now();
+      lastActivityRef.current = now;
+
+      // บันทึกลง localStorage แบบ Throttle ทุก 10 วินาที เพื่อประสิทธิภาพสูงสุด
+      if (now - lastThrottleStorageRef.current > 10000) {
+        lastThrottleStorageRef.current = now;
+        try {
+          localStorage.setItem(STORAGE_KEY_LAST_ACTIVITY, String(now));
+        } catch (e) {}
+      }
+    };
+
+    // ตรวจสอบว่าหยุดไม่ขยับเกิน 30 นาทีหรือไม่
+    const checkInactivity = () => {
+      const now = Date.now();
+      let lastActive = lastActivityRef.current;
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY_LAST_ACTIVITY);
+        if (stored) {
+          lastActive = Math.max(lastActive, Number(stored));
+        }
+      } catch (e) {}
+
+      if (now - lastActive >= INACTIVITY_TIMEOUT_MS) {
+        handleInactivityLogout();
+      }
+    };
+
+    // ดักจับทุกเหตุการณ์การใช้งานหน้าจอ
+    const activityEvents = [
+      'mousemove',
+      'mousedown',
+      'keydown',
+      'touchstart',
+      'touchmove',
+      'scroll',
+      'wheel',
+      'click'
+    ];
+
+    activityEvents.forEach((event) => {
+      window.addEventListener(event, recordUserActivity, { passive: true });
+    });
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkInactivity();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', checkInactivity);
+
+    // ตรวจสอบสม่ำเสมอทุก 10 วินาทีในเบื้องหลัง
+    const timerId = setInterval(checkInactivity, 10000);
+
+    return () => {
+      activityEvents.forEach((event) => {
+        window.removeEventListener(event, recordUserActivity);
+      });
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', checkInactivity);
+      clearInterval(timerId);
+    };
+  }, [isAuthenticated, handleInactivityLogout]);
 
   // -------------------------------------------------------------
   // Real-Time Cross-Device Synchronization
@@ -893,6 +1008,10 @@ export default function App() {
   const handleLoginSuccess = (user: string) => {
     setIsAuthenticated(true);
     setCurrentUser(user);
+    lastActivityRef.current = Date.now();
+    try {
+      localStorage.setItem(STORAGE_KEY_LAST_ACTIVITY, String(Date.now()));
+    } catch (e) {}
     showToast('เข้าสู่ระบบสำเร็จ', `ยินดีต้อนรับผู้ดูแลระบบ (${user})`, 'success');
 
     // ซิงค์ดึงข้อมูลล่าสุดจาก Google Sheets ทันทีหลังล็อกอิน
@@ -920,6 +1039,7 @@ export default function App() {
     try {
       localStorage.removeItem(STORAGE_KEY_AUTH);
       sessionStorage.removeItem(STORAGE_KEY_AUTH);
+      localStorage.removeItem(STORAGE_KEY_LAST_ACTIVITY);
     } catch (e) {
       console.warn('Logout storage clear error:', e);
     }
