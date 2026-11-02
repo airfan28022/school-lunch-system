@@ -111,6 +111,37 @@ function cleanDailyEntryDishes(entry: DailyMenuEntry): DailyMenuEntry {
   return clean;
 }
 
+function mergeDailyEntry(existing: DailyMenuEntry, incoming: DailyMenuEntry): DailyMenuEntry {
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+
+  const result: DailyMenuEntry = { ...existing, ...incoming };
+  const dishFields: (keyof Pick<DailyMenuEntry, 'rice' | 'singleDish' | 'spicy' | 'nonSpicy' | 'dessert'>)[] = [
+    'rice',
+    'singleDish',
+    'spicy',
+    'nonSpicy',
+    'dessert'
+  ];
+
+  dishFields.forEach((field) => {
+    const incVal = incoming[field] ? String(incoming[field]).trim() : '';
+    const existVal = existing[field] ? String(existing[field]).trim() : '';
+    // หากข้อมูลใหม่เป็นช่องว่าง แต่ข้อมูลเดิมมีเมนูอยู่แล้ว ให้รักษาเมนูเดิมไว้เด็ดขาด ไม่ลบออก
+    if (!incVal && existVal) {
+      result[field] = existVal;
+    } else if (incVal) {
+      result[field] = incVal;
+    }
+  });
+
+  if ((!result.photos || result.photos.length === 0) && (existing.photos && existing.photos.length > 0)) {
+    result.photos = existing.photos;
+  }
+
+  return result;
+}
+
 export default function App() {
   // Authentication state (ID: Admin, Password: 1159551)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -584,11 +615,9 @@ export default function App() {
                 const localItem = mergedMap.get(sDate);
                 if (!localItem) {
                   mergedMap.set(sDate, s);
-                } else if (hasMealContent(s)) {
-                  // Server has actual meal content, take server
-                  mergedMap.set(sDate, s);
+                } else {
+                  mergedMap.set(sDate, mergeDailyEntry(localItem, s));
                 }
-                // If server entry has empty dishes but local HAS dishes, keep local!
               });
 
               const mergedList = Array.from(mergedMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -861,8 +890,8 @@ export default function App() {
               const localItem = mergedMap.get(sDate);
               if (!localItem) {
                 mergedMap.set(sDate, s);
-              } else if (hasMealContent(s)) {
-                mergedMap.set(sDate, s);
+              } else {
+                mergedMap.set(sDate, mergeDailyEntry(localItem, s));
               }
             });
             return Array.from(mergedMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -1214,7 +1243,7 @@ export default function App() {
     } catch (e) {}
     showToast('เข้าสู่ระบบสำเร็จ', `ยินดีต้อนรับผู้ดูแลระบบ (${user})`, 'success');
 
-    // ซิงค์ดึงข้อมูลล่าสุดจาก Google Sheets ทันทีหลังล็อกอิน
+    // ซิงค์ดึงข้อมูลล่าสุดอย่างปลอดภัย โดยใช้ mergeDailyEntry ไม่เขียนทับเมนูที่มีอยู่เดิมเด็ดขาด
     fetchServerData(settings.gasWebAppUrl)
       .then((data) => {
         if (data && data.success) {
@@ -1225,7 +1254,57 @@ export default function App() {
             setMenuBank(data.menuBank);
           }
           if (Array.isArray(data.dailyMenus)) {
-            setDailyMenus(data.dailyMenus);
+            let currentDel = deletedDates;
+            try {
+              const savedDel = localStorage.getItem(STORAGE_KEY_DELETED_DATES);
+              if (savedDel) currentDel = new Set<string>(JSON.parse(savedDel));
+            } catch {}
+            const clean = data.dailyMenus
+              .filter((m: DailyMenuEntry) => m && m.date && !currentDel.has(m.date.trim().slice(0, 10)))
+              .map(cleanDailyEntryDishes);
+
+            setDailyMenus((prev) => {
+              const mergedMap = new Map<string, DailyMenuEntry>();
+              prev.forEach((item) => {
+                if (item && item.date && !currentDel.has(item.date.trim().slice(0, 10))) {
+                  mergedMap.set(item.date.trim().slice(0, 10), item);
+                }
+              });
+              try {
+                const stored = localStorage.getItem(STORAGE_KEY_DAILY_MENUS);
+                if (stored) {
+                  const parsed: DailyMenuEntry[] = JSON.parse(stored);
+                  parsed.forEach((item) => {
+                    const cleanDate = item && item.date && item.date.trim().slice(0, 10);
+                    if (cleanDate && !currentDel.has(cleanDate)) {
+                      const exist = mergedMap.get(cleanDate);
+                      if (!exist) {
+                        mergedMap.set(cleanDate, cleanDailyEntryDishes(item));
+                      } else {
+                        mergedMap.set(cleanDate, mergeDailyEntry(exist, cleanDailyEntryDishes(item)));
+                      }
+                    }
+                  });
+                }
+              } catch {}
+              clean.forEach((s: DailyMenuEntry) => {
+                const sDate = s.date.trim().slice(0, 10);
+                const localItem = mergedMap.get(sDate);
+                if (!localItem) {
+                  mergedMap.set(sDate, s);
+                } else {
+                  mergedMap.set(sDate, mergeDailyEntry(localItem, s));
+                }
+              });
+              const mergedList = Array.from(mergedMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+              try {
+                localStorage.setItem(STORAGE_KEY_DAILY_MENUS, JSON.stringify(mergedList));
+              } catch {}
+              return mergedList;
+            });
+          }
+          if (Array.isArray(data.taxRecords) && data.taxRecords.length > 0) {
+            setTaxRecords(data.taxRecords);
           }
           if (data.lastUpdated) {
             lastServerTimestampRef.current = data.lastUpdated;
@@ -1237,12 +1316,17 @@ export default function App() {
 
   const handleConfirmLogout = () => {
     try {
+      localStorage.setItem(STORAGE_KEY_DAILY_MENUS, JSON.stringify(dailyMenus));
+      localStorage.setItem(STORAGE_KEY_MENU_BANK, JSON.stringify(menuBank));
+      localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
       localStorage.removeItem(STORAGE_KEY_AUTH);
       sessionStorage.removeItem(STORAGE_KEY_AUTH);
       localStorage.removeItem(STORAGE_KEY_LAST_ACTIVITY);
     } catch (e) {
       console.warn('Logout storage clear error:', e);
     }
+    // ส่งข้อมูลล่าสุดไปสำรองบนเซิร์ฟเวอร์ทันทีก่อนออกจากระบบ
+    saveServerData({ settings, menuBank, dailyMenus, syncToGas: true }).catch(() => {});
     setIsAuthenticated(false);
     setShowLogoutConfirm(false);
     showToast('ออกจากระบบแล้ว', 'ออกจากระบบการทำงานเรียบร้อยแล้ว', 'info');

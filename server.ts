@@ -104,6 +104,31 @@ function initStore(): StoreData {
   return initialStore;
 }
 
+function mergeDailyEntry(existing: any, incoming: any): any {
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+
+  const result = { ...existing, ...incoming };
+  const dishFields = ['rice', 'singleDish', 'spicy', 'nonSpicy', 'dessert'] as const;
+
+  dishFields.forEach((field) => {
+    const incVal = incoming[field] ? String(incoming[field]).trim() : '';
+    const existVal = existing[field] ? String(existing[field]).trim() : '';
+    // หากข้อมูลใหม่เป็นช่องว่าง แต่ข้อมูลเดิมมีเมนูอยู่แล้ว ให้รักษาเมนูเดิมไว้เด็ดขาด ไม่ลบออก
+    if (!incVal && existVal) {
+      result[field] = existVal;
+    } else if (incVal) {
+      result[field] = incVal;
+    }
+  });
+
+  if ((!result.photos || result.photos.length === 0) && (existing.photos && existing.photos.length > 0)) {
+    result.photos = existing.photos;
+  }
+
+  return result;
+}
+
 function sanitizeDailyMenus(list: any[]): any[] {
   if (!Array.isArray(list)) return [];
   const map = new Map<string, any>();
@@ -239,20 +264,21 @@ async function syncFromGas(gasUrl?: string): Promise<boolean> {
           const date = gasItem.date;
           const existing = existingMap.get(date);
           const gasHasFood = Boolean(
-            (gasItem.rice && String(gasItem.rice).trim()) ||
             (gasItem.singleDish && String(gasItem.singleDish).trim()) ||
+            (gasItem.rice && String(gasItem.rice).trim()) ||
             (gasItem.spicy && String(gasItem.spicy).trim()) ||
-            (gasItem.nonSpicy && String(gasItem.nonSpicy).trim()) ||
-            (gasItem.dessert && String(gasItem.dessert).trim())
+            (gasItem.nonSpicy && String(gasItem.nonSpicy).trim())
           );
 
           if (!existing) {
-            existingMap.set(date, gasItem);
-          } else if (gasHasFood) {
-            // GAS has populated dishes, update existing
-            existingMap.set(date, gasItem);
+            // เพิ่มวันที่ใหม่จาก GAS เฉพาะกรณีที่มีเมนูอาหารจริงเท่านั้น ห้ามเพิ่มแถวว่างเปล่า
+            if (gasHasFood) {
+              existingMap.set(date, gasItem);
+            }
+          } else {
+            // หากมีอยู่แล้ว ให้ผสานข้อมูลโดยรักษาเมนูเดิมที่มีอยู่เสมอ
+            existingMap.set(date, mergeDailyEntry(existing, gasItem));
           }
-          // If GAS dishes are empty/blank, keep existing populated dishes!
         });
 
         const merged = Array.from(existingMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -336,7 +362,25 @@ async function startServer() {
         current.menuBank = menuBank;
       }
       if (Array.isArray(dailyMenus)) {
-        current.dailyMenus = dailyMenus;
+        const existingMap = new Map<string, any>();
+        (current.dailyMenus || []).forEach((item: any) => {
+          if (item && item.date) {
+            existingMap.set(String(item.date).trim().slice(0, 10), item);
+          }
+        });
+
+        const incomingClean = sanitizeDailyMenus(dailyMenus);
+        incomingClean.forEach((item: any) => {
+          const date = item.date;
+          const existing = existingMap.get(date);
+          if (!existing) {
+            existingMap.set(date, item);
+          } else {
+            existingMap.set(date, mergeDailyEntry(existing, item));
+          }
+        });
+
+        current.dailyMenus = Array.from(existingMap.values()).sort((a, b) => a.date.localeCompare(b.date));
       }
       if (Array.isArray(taxRecords)) {
         current.taxRecords = taxRecords;
