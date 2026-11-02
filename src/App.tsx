@@ -47,8 +47,24 @@ const STORAGE_KEY_TAX_RECORDS = 'thai_school_lunch_tax_records_v1';
 const STORAGE_KEY_DELETED_DATES = 'school_lunch_deleted_dates_v1';
 const STORAGE_KEY_AUTH = 'school_lunch_auth';
 const STORAGE_KEY_LAST_ACTIVITY = 'school_lunch_last_activity_v1';
+const STORAGE_KEY_ACTIVE_TAB = 'school_lunch_active_tab_v2';
+const STORAGE_KEY_ACTIVE_REPORT_MONTH = 'school_lunch_active_report_month_v2';
+const STORAGE_KEY_ACTIVE_REPORT_YEAR = 'school_lunch_active_report_year_v2';
+const STORAGE_KEY_LAST_LOCAL_SAVE = 'school_lunch_last_local_save_v2';
 // กำหนดระยะเวลาหยุดไม่ขยับหน้าจอ: 30 นาที (30 x 60 x 1000 มิลลิวินาที)
 const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+
+// Helper ตรวจสอบว่ารายการอาหารมีเมนูจริงอยู่หรือไม่
+function hasMealContent(entry: DailyMenuEntry | any): boolean {
+  if (!entry) return false;
+  return Boolean(
+    (entry.singleDish && String(entry.singleDish).trim()) ||
+    (entry.rice && String(entry.rice).trim()) ||
+    (entry.spicy && String(entry.spicy).trim()) ||
+    (entry.nonSpicy && String(entry.nonSpicy).trim()) ||
+    (entry.dessert && String(entry.dessert).trim())
+  );
+}
 
 // Known legacy template dummy dishes that do NOT exist in the user's menuBank
 const FORBIDDEN_DUMMY_DISHES = new Set([
@@ -138,8 +154,16 @@ export default function App() {
 
   const [showLogoutConfirm, setShowLogoutConfirm] = useState<boolean>(false);
 
-  // Navigation active tab - Default to 'tax' (จัดการภาษี) as requested
-  const [activeTab, setActiveTab] = useState<'tax' | 'planner' | 'repository' | 'report' | 'settings'>('tax');
+  // Navigation active tab - Persisted in localStorage so reload stays on the exact same view
+  const [activeTab, setActiveTab] = useState<'tax' | 'planner' | 'repository' | 'report' | 'settings'>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_ACTIVE_TAB);
+      if (saved && ['tax', 'planner', 'repository', 'report', 'settings'].includes(saved)) {
+        return saved as any;
+      }
+    } catch {}
+    return 'tax';
+  });
 
   // Real-time synchronization state
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -225,21 +249,74 @@ export default function App() {
   // Ref to track last updated timestamp from server to prevent overwrite loops
   const lastServerTimestampRef = useRef<string>('');
   // Ref to track last local save timestamp to protect freshly randomized/saved data from race conditions
-  const lastLocalSaveTimeRef = useRef<number>(0);
+  const lastLocalSaveTimeRef = useRef<number>(
+    (() => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY_LAST_LOCAL_SAVE);
+        return saved ? Number(saved) : 0;
+      } catch {
+        return 0;
+      }
+    })()
+  );
 
   // Active / Targeted Month & Year for Report & Planner synchronization
   const [activeReportMonth, setActiveReportMonth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_ACTIVE_REPORT_MONTH);
+      if (saved) {
+        const num = Number(saved);
+        if (num >= 1 && num <= 12) return num;
+      }
+    } catch {}
     const d = new Date();
     return d.getMonth() + 1;
   });
+
   const [activeReportYear, setActiveReportYear] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_ACTIVE_REPORT_YEAR);
+      if (saved) {
+        const num = Number(saved);
+        if (num >= 2020 && num <= 2050) return num;
+      }
+    } catch {}
     const d = new Date();
     return d.getFullYear();
   });
 
+  // Persist activeTab, activeReportMonth, activeReportYear
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_ACTIVE_TAB, activeTab);
+    } catch {}
+  }, [activeTab]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_ACTIVE_REPORT_MONTH, String(activeReportMonth));
+    } catch {}
+  }, [activeReportMonth]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_ACTIVE_REPORT_YEAR, String(activeReportYear));
+    } catch {}
+  }, [activeReportYear]);
+
   const handleNavigateToReport = (month?: number, year?: number) => {
-    if (month) setActiveReportMonth(month);
-    if (year) setActiveReportYear(year);
+    if (month) {
+      setActiveReportMonth(month);
+      try {
+        localStorage.setItem(STORAGE_KEY_ACTIVE_REPORT_MONTH, String(month));
+      } catch {}
+    }
+    if (year) {
+      setActiveReportYear(year);
+      try {
+        localStorage.setItem(STORAGE_KEY_ACTIVE_REPORT_YEAR, String(year));
+      } catch {}
+    }
     setActiveTab('report');
   };
 
@@ -489,16 +566,36 @@ export default function App() {
               )
               .map(cleanDailyEntryDishes);
 
-            // Compare with current dailyMenus before updating to prevent unexpected mutations and jumping
+            // Non-destructively merge incoming server data with local state
+            // Never allow an empty or incomplete server payload to wipe out locally randomized meals!
             setDailyMenus((prev) => {
-              // CRITICAL GUARD: If incoming clean list from server is empty BUT local state has items, do NOT wipe out local items!
-              if (clean.length === 0 && prev.length > 0) {
+              const mergedMap = new Map<string, DailyMenuEntry>();
+
+              // 1. First, preserve all valid local items
+              prev.forEach((item) => {
+                if (item && item.date && !currentDel.has(item.date.trim().slice(0, 10))) {
+                  mergedMap.set(item.date.trim().slice(0, 10), item);
+                }
+              });
+
+              // 2. Merge server entries intelligently
+              clean.forEach((s: DailyMenuEntry) => {
+                const sDate = s.date.trim().slice(0, 10);
+                const localItem = mergedMap.get(sDate);
+                if (!localItem) {
+                  mergedMap.set(sDate, s);
+                } else if (hasMealContent(s)) {
+                  // Server has actual meal content, take server
+                  mergedMap.set(sDate, s);
+                }
+                // If server entry has empty dishes but local HAS dishes, keep local!
+              });
+
+              const mergedList = Array.from(mergedMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+              if (JSON.stringify(prev) === JSON.stringify(mergedList)) {
                 return prev;
               }
-              if (JSON.stringify(prev) === JSON.stringify(clean)) {
-                return prev;
-              }
-              return clean;
+              return mergedList;
             });
           }
 
@@ -601,17 +698,23 @@ export default function App() {
   // Daily Menu Planner Actions (Module 2)
   // -------------------------------------------------------------
   const handleSaveDailyMenu = async (entry: DailyMenuEntry): Promise<boolean> => {
-    lastLocalSaveTimeRef.current = Date.now();
+    const now = Date.now();
+    lastLocalSaveTimeRef.current = now;
+    try {
+      localStorage.setItem(STORAGE_KEY_LAST_LOCAL_SAVE, String(now));
+    } catch {}
+
     const cleanDate = entry.date.trim().slice(0, 10);
     const cleanEntry = { ...entry, date: cleanDate };
 
     // ปลดล็อควันที่นี้ออกจากรายการที่เคยถูกลบ เพื่อให้บันทึกหรือสุ่มใหม่ได้สำเร็จ
+    let activeDelArray: string[] = [];
     setDeletedDates((prev) => {
-      if (!prev.has(cleanDate)) return prev;
       const next = new Set(prev);
       next.delete(cleanDate);
+      activeDelArray = Array.from(next);
       try {
-        localStorage.setItem(STORAGE_KEY_DELETED_DATES, JSON.stringify(Array.from(next)));
+        localStorage.setItem(STORAGE_KEY_DELETED_DATES, JSON.stringify(activeDelArray));
       } catch (e) {}
       return next;
     });
@@ -636,8 +739,12 @@ export default function App() {
 
     // ซิงค์เฉพาะวันที่บันทึกไปยัง Google Sheets ใน ~300ms แทนการวนลูปทั้งเดือน
     saveSingleDailyMenuDirect(cleanEntry, settings.gasWebAppUrl);
-    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, deletedDates: activeDelArray, syncToGas: true });
     lastLocalSaveTimeRef.current = Date.now();
+    try {
+      localStorage.setItem(STORAGE_KEY_LAST_LOCAL_SAVE, String(lastLocalSaveTimeRef.current));
+    } catch {}
+
     if (saveRes && saveRes.lastUpdated) {
       lastServerTimestampRef.current = saveRes.lastUpdated;
     }
@@ -646,22 +753,33 @@ export default function App() {
   };
 
   const handleBatchSaveDailyMenus = async (entries: DailyMenuEntry[]): Promise<boolean> => {
-    lastLocalSaveTimeRef.current = Date.now();
+    const now = Date.now();
+    lastLocalSaveTimeRef.current = now;
+    try {
+      localStorage.setItem(STORAGE_KEY_LAST_LOCAL_SAVE, String(now));
+    } catch {}
+
     if (entries.length > 0) {
       const [y, m] = entries[0].date.split('-').map(Number);
       if (y && m) {
         setActiveReportYear(y);
         setActiveReportMonth(m);
+        try {
+          localStorage.setItem(STORAGE_KEY_ACTIVE_REPORT_YEAR, String(y));
+          localStorage.setItem(STORAGE_KEY_ACTIVE_REPORT_MONTH, String(m));
+        } catch {}
       }
     }
 
     // ปลดล็อควันที่ทั้งหมดในชุดที่เพิ่งสุ่มหรือบันทึกใหม่ออกจาก deletedDates
     const incomingDates = new Set(entries.map((e) => e.date.trim().slice(0, 10)));
+    let activeDelArray: string[] = [];
     setDeletedDates((prev) => {
       const next = new Set(prev);
       incomingDates.forEach((d) => next.delete(d));
+      activeDelArray = Array.from(next);
       try {
-        localStorage.setItem(STORAGE_KEY_DELETED_DATES, JSON.stringify(Array.from(next)));
+        localStorage.setItem(STORAGE_KEY_DELETED_DATES, JSON.stringify(activeDelArray));
       } catch (e) {}
       return next;
     });
@@ -694,8 +812,12 @@ export default function App() {
     }
 
     // ซิงค์ทั้งเดือนด้วย High-speed Batch mode (ครั้งเดียวจบ ไม่วนลูป 20 ครั้ง)
-    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, syncToGas: true });
+    const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, deletedDates: activeDelArray, syncToGas: true });
     lastLocalSaveTimeRef.current = Date.now();
+    try {
+      localStorage.setItem(STORAGE_KEY_LAST_LOCAL_SAVE, String(lastLocalSaveTimeRef.current));
+    } catch {}
+
     if (saveRes && saveRes.lastUpdated) {
       lastServerTimestampRef.current = saveRes.lastUpdated;
     }
@@ -723,8 +845,28 @@ export default function App() {
             const savedDel = localStorage.getItem(STORAGE_KEY_DELETED_DATES);
             if (savedDel) currentDel = new Set<string>(JSON.parse(savedDel));
           } catch {}
-          const clean = data.dailyMenus.filter((m: DailyMenuEntry) => m && m.date && !currentDel.has(m.date.trim().slice(0, 10)));
-          setDailyMenus(clean);
+          const clean = data.dailyMenus
+            .filter((m: DailyMenuEntry) => m && m.date && !currentDel.has(m.date.trim().slice(0, 10)))
+            .map(cleanDailyEntryDishes);
+
+          setDailyMenus((prev) => {
+            const mergedMap = new Map<string, DailyMenuEntry>();
+            prev.forEach((item) => {
+              if (item && item.date && !currentDel.has(item.date.trim().slice(0, 10))) {
+                mergedMap.set(item.date.trim().slice(0, 10), item);
+              }
+            });
+            clean.forEach((s: DailyMenuEntry) => {
+              const sDate = s.date.trim().slice(0, 10);
+              const localItem = mergedMap.get(sDate);
+              if (!localItem) {
+                mergedMap.set(sDate, s);
+              } else if (hasMealContent(s)) {
+                mergedMap.set(sDate, s);
+              }
+            });
+            return Array.from(mergedMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+          });
         }
         if (data.taxRecords) setTaxRecords(data.taxRecords);
         showToast('ซิงค์ข้อมูลสำเร็จ', 'ข้อมูลล่าสุดตรงกันทุกอุปกรณ์แล้ว', 'success');
@@ -1191,6 +1333,10 @@ export default function App() {
               initialMonth={activeReportMonth}
               initialYear={activeReportYear}
               onNavigateToPlanner={handleNavigateToPlanner}
+              onActiveMonthYearChange={(m, y) => {
+                setActiveReportMonth(m);
+                setActiveReportYear(y);
+              }}
             />
           )}
 

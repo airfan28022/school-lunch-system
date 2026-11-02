@@ -226,12 +226,39 @@ async function syncFromGas(gasUrl?: string): Promise<boolean> {
       if (Array.isArray(data.dailyMenu)) {
         const deletedSet = new Set(current.deletedDates || []);
         const sanitized = sanitizeDailyMenus(data.dailyMenu).filter((item) => !deletedSet.has(item.date));
-        // Protect local store: never overwrite non-empty dailyMenus with empty list from GAS
-        if (sanitized.length > 0 || (current.dailyMenus || []).length === 0) {
-          if (JSON.stringify(sanitized) !== JSON.stringify(current.dailyMenus || [])) {
-            current.dailyMenus = sanitized;
-            changed = true;
+        
+        const existingMap = new Map<string, any>();
+        (current.dailyMenus || []).forEach((item: any) => {
+          if (item && item.date && !deletedSet.has(item.date)) {
+            existingMap.set(item.date, item);
           }
+        });
+
+        // Non-destructively merge incoming GAS entries
+        sanitized.forEach((gasItem: any) => {
+          const date = gasItem.date;
+          const existing = existingMap.get(date);
+          const gasHasFood = Boolean(
+            (gasItem.rice && String(gasItem.rice).trim()) ||
+            (gasItem.singleDish && String(gasItem.singleDish).trim()) ||
+            (gasItem.spicy && String(gasItem.spicy).trim()) ||
+            (gasItem.nonSpicy && String(gasItem.nonSpicy).trim()) ||
+            (gasItem.dessert && String(gasItem.dessert).trim())
+          );
+
+          if (!existing) {
+            existingMap.set(date, gasItem);
+          } else if (gasHasFood) {
+            // GAS has populated dishes, update existing
+            existingMap.set(date, gasItem);
+          }
+          // If GAS dishes are empty/blank, keep existing populated dishes!
+        });
+
+        const merged = Array.from(existingMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+        if (JSON.stringify(merged) !== JSON.stringify(current.dailyMenus || [])) {
+          current.dailyMenus = merged;
+          changed = true;
         }
       }
       if (Array.isArray(data.taxRecords) && data.taxRecords.length > 0) {
@@ -310,17 +337,18 @@ async function startServer() {
       }
       if (Array.isArray(dailyMenus)) {
         current.dailyMenus = dailyMenus;
-        // หากผู้ใช้บันทึกหรือสุ่มเมนูวันนั้นใหม่ ให้ปลดล็อคออกจากรายการที่ถูกลบ
-        const savedDates = new Set(dailyMenus.map((m: any) => m && m.date));
-        if (current.deletedDates) {
-          current.deletedDates = current.deletedDates.filter((d) => !savedDates.has(d));
-        }
       }
       if (Array.isArray(taxRecords)) {
         current.taxRecords = taxRecords;
       }
       if (Array.isArray(deletedDates)) {
-        current.deletedDates = Array.from(new Set([...(current.deletedDates || []), ...deletedDates]));
+        current.deletedDates = deletedDates;
+      }
+
+      // ปลดล็อควันที่ทั้งหมดที่มีรายการอาหารออกจาก deletedDates เสมอ
+      if (Array.isArray(current.dailyMenus) && current.deletedDates) {
+        const savedDates = new Set(current.dailyMenus.map((m: any) => m && m.date && String(m.date).trim().slice(0, 10)));
+        current.deletedDates = current.deletedDates.filter((d) => !savedDates.has(d));
       }
 
       lastServerSaveTime = Date.now();

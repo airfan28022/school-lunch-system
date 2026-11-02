@@ -2,6 +2,8 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { DailyMenuEntry, SchoolSettings, MenuItem, cleanDailyMenuEntry } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { generateMonthlyMenu } from '../services/menuRandomizer';
+import jsPDF from 'jspdf';
+import html2canvasPro from 'html2canvas-pro';
 import { 
   Printer, 
   Search, 
@@ -13,7 +15,11 @@ import {
   Save, 
   Sparkles,
   BookOpen,
-  ChevronDown
+  ChevronDown,
+  Download,
+  FileDown,
+  Eye,
+  Loader2
 } from 'lucide-react';
 
 /**
@@ -319,6 +325,7 @@ interface PrintReportProps {
   initialMonth?: number;
   initialYear?: number;
   onNavigateToPlanner?: (date?: string) => void;
+  onActiveMonthYearChange?: (month: number, year: number) => void;
 }
 
 export const PrintReport: React.FC<PrintReportProps> = ({
@@ -332,7 +339,8 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   onBatchSaveDailyMenus,
   initialMonth,
   initialYear,
-  onNavigateToPlanner
+  onNavigateToPlanner,
+  onActiveMonthYearChange
 }) => {
   const THAI_MONTHS = [
     'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -378,22 +386,74 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   }, [dailyMenus]);
 
   // กำหนดเดือนและปีเริ่มต้น:
-  // ลำดับ 1: ใช้จาก initialYear / initialMonth ถ้ามีส่งเข้ามา (เช่น เพิ่งกดสุ่มในหน้าจัดการ)
-  // ลำดับ 2: ถ้ามีเมนูในระบบ ให้เลือกเดือนล่าสุดที่มีข้อมูล
+  // ลำดับ 1: ใช้จาก initialYear / initialMonth ถ้ามีส่งเข้ามา
+  // ลำดับ 2: โหลดจาก localStorage เพื่อให้ reload แล้วยังอยู่เดือนเดิมตลอดเวลา ไม่เปลี่ยนเดือน
+  // ลำดับ 3: ใช้เดือน/ปีปัจจุบัน
   const [selectedYear, setSelectedYear] = useState<number>(() => {
     if (initialYear) return initialYear;
+    try {
+      const saved = localStorage.getItem('school_lunch_active_report_year_v2');
+      if (saved) {
+        const num = Number(saved);
+        if (num >= 2020 && num <= 2050) return num;
+      }
+    } catch {}
     return new Date().getFullYear();
   });
 
   const [selectedMonth, setSelectedMonth] = useState<number>(() => {
     if (initialMonth) return initialMonth;
+    try {
+      const saved = localStorage.getItem('school_lunch_active_report_month_v2');
+      if (saved) {
+        const num = Number(saved);
+        if (num >= 1 && num <= 12) return num;
+      }
+    } catch {}
     return new Date().getMonth() + 1;
   });
 
+  // ฟังก์ชันสลับเดือน/ปี พร้อมบันทึกลง localStorage และแจ้งเตือน component แม่ทันที
+  const handleSelectMonth = (m: number) => {
+    setSelectedMonth(m);
+    try {
+      localStorage.setItem('school_lunch_active_report_month_v2', String(m));
+    } catch {}
+    onActiveMonthYearChange?.(m, selectedYear);
+  };
+
+  const handleSelectYear = (y: number) => {
+    setSelectedYear(y);
+    try {
+      localStorage.setItem('school_lunch_active_report_year_v2', String(y));
+    } catch {}
+    onActiveMonthYearChange?.(selectedMonth, y);
+  };
+
+  const handleSelectMonthYear = (m: number, y: number) => {
+    setSelectedMonth(m);
+    setSelectedYear(y);
+    try {
+      localStorage.setItem('school_lunch_active_report_month_v2', String(m));
+      localStorage.setItem('school_lunch_active_report_year_v2', String(y));
+    } catch {}
+    onActiveMonthYearChange?.(m, y);
+  };
+
   // ซิงค์เมื่อ initialMonth หรือ initialYear จากภายนอกเปลี่ยน (เช่น ผู้ใช้เพิ่งกดสุ่มเดือนใหม่)
   React.useEffect(() => {
-    if (initialMonth) setSelectedMonth(initialMonth);
-    if (initialYear) setSelectedYear(initialYear);
+    if (initialMonth && initialMonth !== selectedMonth) {
+      setSelectedMonth(initialMonth);
+      try {
+        localStorage.setItem('school_lunch_active_report_month_v2', String(initialMonth));
+      } catch {}
+    }
+    if (initialYear && initialYear !== selectedYear) {
+      setSelectedYear(initialYear);
+      try {
+        localStorage.setItem('school_lunch_active_report_year_v2', String(initialYear));
+      } catch {}
+    }
   }, [initialMonth, initialYear]);
   
   // Filter by search
@@ -580,6 +640,8 @@ export const PrintReport: React.FC<PrintReportProps> = ({
   const executeRandomizeCurrentMonth = async () => {
     setIsRandomizeConfirmOpen(false);
     setIsRandomizing(true);
+    // Persist current month & year immediately so reload never loses track
+    handleSelectMonthYear(selectedMonth, selectedYear);
     try {
       const generatedEntries = generateMonthlyMenu(selectedMonth, selectedYear, menuBank, dailyMenus);
       if (onBatchSaveDailyMenus) {
@@ -632,6 +694,108 @@ export const PrintReport: React.FC<PrintReportProps> = ({
     handleOpenEdit(newEntry);
   };
 
+  // Preview Modal & PDF Download States
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState<boolean>(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
+  const previewDocRef = useRef<HTMLDivElement>(null);
+
+  const handleOpenPreviewModal = () => {
+    if (monthEntries.length === 0) {
+      showToast('ไม่พบรายการอาหาร', `ไม่มีรายการอาหารในเดือน ${thaiMonthName} ${buddhistYear} สำหรับดาวน์โหลด`, 'warning');
+      return;
+    }
+    setIsPreviewModalOpen(true);
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!previewDocRef.current) return;
+    setIsDownloadingPdf(true);
+    try {
+      const element = previewDocRef.current;
+
+      const canvas = await html2canvasPro(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight
+      });
+
+      const imgData = canvas.toDataURL('image/png', 1.0);
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4',
+        compress: true
+      });
+
+      const pdfWidth = 210;
+      const pdfHeight = 297;
+      const margin = 8;
+      const printableWidth = pdfWidth - margin * 2;
+      const printableHeight = pdfHeight - margin * 2;
+
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+      const totalPdfHeight = (canvasHeight * printableWidth) / canvasWidth;
+
+      if (totalPdfHeight <= printableHeight) {
+        pdf.addImage(imgData, 'PNG', margin, margin, printableWidth, totalPdfHeight);
+      } else {
+        let currentY = 0;
+        const pageCanvasHeight = (printableHeight * canvasWidth) / printableWidth;
+
+        while (currentY < canvasHeight) {
+          const sliceCanvas = document.createElement('canvas');
+          sliceCanvas.width = canvasWidth;
+          const sliceHeight = Math.min(pageCanvasHeight, canvasHeight - currentY);
+          sliceCanvas.height = sliceHeight;
+
+          const ctx = sliceCanvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+            ctx.drawImage(
+              canvas,
+              0,
+              currentY,
+              canvasWidth,
+              sliceHeight,
+              0,
+              0,
+              canvasWidth,
+              sliceHeight
+            );
+          }
+
+          const sliceImgData = sliceCanvas.toDataURL('image/png', 1.0);
+          const slicePdfHeight = (sliceHeight * printableWidth) / canvasWidth;
+
+          if (currentY > 0) {
+            pdf.addPage();
+          }
+          pdf.addImage(sliceImgData, 'PNG', margin, margin, printableWidth, slicePdfHeight);
+          currentY += sliceHeight;
+        }
+      }
+
+      const safeSchoolName = settings.schoolName
+        ? `_${settings.schoolName.replace(/[/\\?%*:|"<>]/g, '')}`
+        : '';
+      const fileName = `รายงานอาหารกลางวัน_${thaiMonthName}_${buddhistYear}${safeSchoolName}.pdf`;
+      pdf.save(fileName);
+
+      showToast('ดาวน์โหลดสำเร็จ', `ดาวน์โหลดไฟล์ "${fileName}" เรียบร้อยแล้ว`, 'success');
+    } catch (err: any) {
+      console.error('PDF Generation Error:', err);
+      showToast('เกิดข้อผิดพลาดในการดาวน์โหลด', err?.message || 'ไม่สามารถสร้างไฟล์ PDF ได้', 'error');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   // Trigger browser native print
   const handlePrint = () => {
     window.print();
@@ -656,7 +820,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               <select
                 id="select-report-month-mobile"
                 value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                onChange={(e) => handleSelectMonth(Number(e.target.value))}
                 className="text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer shrink-0"
                 title={`เลือกเดือน (ปัจจุบัน: ${THAI_MONTHS[selectedMonth - 1]})`}
               >
@@ -673,7 +837,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               <select
                 id="select-report-year-mobile"
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                onChange={(e) => handleSelectYear(Number(e.target.value))}
                 className="text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer shrink-0"
                 title={`เลือกปี (ปัจจุบัน: ${selectedYear + 543})`}
               >
@@ -767,16 +931,16 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               <span>เพิ่มวัน</span>
             </button>
 
-            {/* พิมพ์ */}
+            {/* ดาวน์โหลด */}
             <button
-              id="btn-print-action-mobile"
+              id="btn-download-action-mobile"
               type="button"
-              onClick={handlePrint}
+              onClick={handleOpenPreviewModal}
               className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-bold rounded-xl text-xs shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer whitespace-nowrap"
-              title="สั่งพิมพ์รายงาน"
+              title="ดูตัวอย่างเอกสารและดาวน์โหลด PDF"
             >
-              <Printer className="w-3.5 h-3.5 shrink-0" />
-              <span>พิมพ์</span>
+              <Download className="w-3.5 h-3.5 shrink-0" />
+              <span>ดาวน์โหลด</span>
             </button>
           </div>
         </div>
@@ -790,7 +954,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               <select
                 id="select-report-month"
                 value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                onChange={(e) => handleSelectMonth(Number(e.target.value))}
                 className="text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
               >
                 {THAI_MONTHS.map((m, idx) => (
@@ -803,7 +967,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               <select
                 id="select-report-year"
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                onChange={(e) => handleSelectYear(Number(e.target.value))}
                 className="text-xs font-bold text-slate-800 bg-transparent focus:outline-hidden cursor-pointer"
               >
                 {availableYears.map((y) => (
@@ -873,16 +1037,16 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               />
             </div>
 
-            {/* Action Button: Print / Save as PDF via Browser */}
+            {/* Action Button: Download PDF */}
             <button
-              id="btn-print-action"
+              id="btn-download-action"
               type="button"
-              onClick={handlePrint}
+              onClick={handleOpenPreviewModal}
               className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold rounded-xl text-xs shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-              title="สั่งพิมพ์ A4 หรือบันทึกเป็นไฟล์ PDF"
+              title="ดูตัวอย่างเอกสารและดาวน์โหลดเป็นไฟล์ PDF"
             >
-              <Printer className="w-4 h-4" />
-              <span>พิมพ์</span>
+              <Download className="w-4 h-4" />
+              <span>ดาวน์โหลด</span>
             </button>
           </div>
         </div>
@@ -930,10 +1094,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
                     <button
                       key={m.key}
                       type="button"
-                      onClick={() => {
-                        setSelectedYear(m.year);
-                        setSelectedMonth(m.month);
-                      }}
+                      onClick={() => handleSelectMonthYear(m.month, m.year)}
                       className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                     >
                       <span>เปิดรายงานเดือน {m.label}</span>
@@ -1466,6 +1627,195 @@ export const PrintReport: React.FC<PrintReportProps> = ({
         onConfirm={executeRandomizeCurrentMonth}
         onCancel={() => setIsRandomizeConfirmOpen(false)}
       />
+
+      {/* ------------------------------------------------------------- */}
+      {/* Document Preview & Auto-PDF Download Modal                     */}
+      {/* ------------------------------------------------------------- */}
+      {isPreviewModalOpen && (
+        <div className="no-print fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex flex-col justify-between overflow-hidden animate-in fade-in">
+          {/* 1. Modal Top Bar */}
+          <div className="bg-white border-b border-slate-200 px-4 py-3 sm:px-6 flex items-center justify-between shadow-xs shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+                <FileDown className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+                  ตัวอย่างเอกสารรายงานอาหารกลางวัน
+                  <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    พบ {monthEntries.length} วัน
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  ประจำเดือน {thaiMonthName} {buddhistYear} {settings.schoolName ? `• ${settings.schoolName}` : ''}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Secondary print button inside preview */}
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-300 transition-colors cursor-pointer"
+                title="พิมพ์ผ่านเครื่องพิมพ์โดยตรง"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-600" />
+                <span>พิมพ์</span>
+              </button>
+
+              {/* Primary Download button in header */}
+              <button
+                type="button"
+                onClick={handleDownloadPDF}
+                disabled={isDownloadingPdf}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+              >
+                {isDownloadingPdf ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>กำลังสร้าง PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-3.5 h-3.5" />
+                    <span>ดาวน์โหลด PDF</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPreviewModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer ml-1"
+                aria-label="ปิดหน้าต่าง"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* 2. Scrollable Document Preview Area */}
+          <div className="flex-1 overflow-y-auto p-3 sm:p-8 bg-slate-200/90 flex justify-center items-start">
+            {/* The Document Paper (A4 aspect-ratio look) */}
+            <div
+              ref={previewDocRef}
+              className="bg-white w-full max-w-[210mm] p-6 sm:p-10 shadow-2xl rounded-sm border border-slate-300 text-slate-900 mx-auto"
+              style={{ minHeight: '297mm' }}
+            >
+              {/* Document Header */}
+              <div className="text-center pb-3 mb-4 border-b-2 border-slate-900">
+                <h1 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight leading-snug">
+                  รายงานอาหารกลางวัน ประจำเดือน {thaiMonthName} {buddhistYear}
+                </h1>
+                {settings.schoolName && (
+                  <p className="text-xs sm:text-sm font-semibold text-slate-800 mt-1">
+                    {settings.schoolName}
+                  </p>
+                )}
+                {settings.department && (
+                  <p className="text-[11px] sm:text-xs text-slate-600">
+                    {settings.department}
+                  </p>
+                )}
+              </div>
+
+              {/* Document Table */}
+              <table className="w-full border-collapse border border-slate-900 text-left text-xs sm:text-sm">
+                <thead>
+                  <tr className="bg-slate-100 text-slate-900 font-bold border border-slate-900">
+                    <th className="p-2 sm:p-2.5 border border-slate-900 text-center w-28 sm:w-32 whitespace-nowrap">
+                      วันที่
+                    </th>
+                    <th className="p-2.5 sm:p-3 border border-slate-900 text-center">
+                      รายการอาหาร
+                    </th>
+                    <th className="p-2 sm:p-2.5 border border-slate-900 text-center w-24 sm:w-28 whitespace-nowrap">
+                      หมายเหตุ
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthEntries.map((entry) => {
+                    const shortDate = formatShortDate(entry.date);
+                    const parts = entry.date.split('-').map(Number);
+                    const entryY = parts[0] > 2400 ? parts[0] - 543 : parts[0];
+                    const d = new Date(entryY, parts[1] - 1, parts[2], 12, 0, 0);
+                    const isMonday = d.getDay() === 1;
+                    const mealString = formatMealList(entry);
+
+                    return (
+                      <tr
+                        key={`preview-${entry.date}`}
+                        className={`border border-slate-800 text-xs sm:text-sm leading-normal ${
+                          isMonday ? 'bg-amber-100/70 border-t-2 border-amber-400' : ''
+                        }`}
+                      >
+                        <td
+                          className={`p-2 sm:p-2.5 border border-slate-700 font-bold text-center whitespace-nowrap ${
+                            isMonday ? 'bg-amber-200/60 text-amber-950' : 'bg-slate-50/40 text-slate-900'
+                          }`}
+                        >
+                          {shortDate}
+                        </td>
+                        <td className="p-2.5 sm:p-3 border border-slate-700 text-slate-900 font-medium">
+                          {mealString}
+                        </td>
+                        <td className="p-2 border border-slate-700 text-center text-xs text-slate-600">
+                          {entry.note || ''}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              {/* Document Footer */}
+              <div className="mt-6 pt-3 border-t border-slate-300 flex items-center justify-between text-[11px] text-slate-500">
+                <span>ระบบบริหารจัดการอาหารกลางวันโรงเรียน</span>
+                <span>จำนวน {monthEntries.length} วันทำการ</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Modal Bottom Action Bar */}
+          <div className="bg-white border-t border-slate-200 px-4 py-3 sm:px-6 flex items-center justify-between shadow-lg shrink-0">
+            <div className="text-xs text-slate-600 hidden sm:block">
+              <span className="font-semibold text-slate-800">ขนาดกระดาษ A4 มาตรฐาน:</span> สามารถกดปุ่ม &ldquo;ดาวน์โหลด PDF&rdquo; เพื่อบันทึกเป็นไฟล์เอกสารทันที
+            </div>
+
+            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => setIsPreviewModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+              >
+                ปิดหน้าต่าง
+              </button>
+
+              <button
+                type="button"
+                id="btn-download-pdf-modal"
+                onClick={handleDownloadPDF}
+                disabled={isDownloadingPdf}
+                className="flex-1 sm:flex-initial px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-95 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {isDownloadingPdf ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>กำลังสร้างไฟล์ PDF...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>ดาวน์โหลด PDF ทันที</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
