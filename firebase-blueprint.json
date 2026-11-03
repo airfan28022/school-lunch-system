@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "SchoolLunchData": {
+      "title": "SchoolLunchData",
+      "description": "Real-time school lunch synchronized data",
+      "type": "object",
+      "properties": {
+        "dailyMenus": {
+          "type": "string",
+          "description": "Serialized JSON string of daily menus"
+        },
+        "menuBank": {
+          "type": "string",
+          "description": "Serialized JSON string of menu bank"
+        },
+        "settings": {
+          "type": "string",
+          "description": "Serialized JSON string of school settings"
+        },
+        "taxRecords": {
+          "type": "string",
+          "description": "Serialized JSON string of tax records"
+        },
+        "lastUpdated": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/school_lunch/{docId}": {
+      "schema": "SchoolLunchData",
+      "description": "Collection for real-time school lunch synchronization across devices"
+    }
+  }
+}

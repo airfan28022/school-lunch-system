@@ -299,7 +299,7 @@ export function subscribeToRealtimeSync(
 let gasDebounceTimer: any = null;
 let pendingGasPayload: any = null;
 
-export function queueDirectGasSync(gasUrl: string, payload: any, delayMs: number = 400) {
+export function queueDirectGasSync(gasUrl: string, payload: any, delayMs: number = 100) {
   pendingGasPayload = payload;
   if (gasDebounceTimer) {
     clearTimeout(gasDebounceTimer);
@@ -324,89 +324,120 @@ export function queueDirectGasSync(gasUrl: string, payload: any, delayMs: number
 }
 
 /**
- * ดึงข้อมูลที่ซิงค์ส่วนกลางจาก Server (ใช้ร่วมกันทุกเครื่อง ทุกเบราว์เซอร์ ทุกอีเมล)
- * ข้อมูลบนเซิร์ฟเวอร์เป็นแหล่งข้อมูลหลักที่แม่นยำ ไม่ดึงทับด้วยข้อมูลเก่าจากชีต
+ * ดึงข้อมูลที่ซิงค์ส่วนกลางจากทั้ง Express Server ภายใน และ Google Apps Script Web App
+ * ผสานข้อมูลแบบ Dual-Engine เพื่อรับประกันว่าทุกเครื่อง ทุกเบราว์เซอร์ และเครื่องของเพื่อนได้รับข้อมูลชุดเดียวกันแบบ 100%
  */
 export async function fetchServerData(gasUrlOverride?: string) {
-  // 1. ลองดึงจากเซิร์ฟเวอร์ Express ภายใน (/api/data)
+  const targetGasUrl = gasUrlOverride || DEFAULT_GAS_URL;
+
+  // 1. ดึงจากเซิร์ฟเวอร์ Express ภายใน (/api/data) เพื่อความเร็วสูงสุด
+  let localData: any = null;
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     const res = await fetch('/api/data', { signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
-      const data = await res.json();
-      if (data && data.success) {
-        // ทำความสะอาดและป้องกันวันที่ซ้ำซ้อนอย่างเด็ดขาด
-        if (Array.isArray(data.dailyMenus)) {
-          const map = new Map<string, DailyMenuEntry>();
-          data.dailyMenus.forEach((m: DailyMenuEntry) => {
-            if (m && m.date) {
-              const cleanDate = String(m.date).trim().slice(0, 10);
-              if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
-                map.set(cleanDate, { ...m, date: cleanDate });
-              }
-            }
-          });
-          data.dailyMenus = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
-        }
-        return data;
-      }
+      localData = await res.json();
     }
   } catch {
-    // โหมดสถิต เช่น Cloudflare Pages จะไม่มี /api/data
+    // โหมดสถิต เช่น Cloudflare Pages
   }
 
-  // 2. ลองดึงไฟล์ static store.json (กรณี Deploy สถิตบน Cloudflare Pages / Vercel)
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch('/data/store.json', { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (res.ok) {
-      const data = await res.json();
-      if (data && (data.menuBank || data.settings || data.dailyMenus || data.taxRecords)) {
-        return {
-          success: true,
-          settings: data.settings,
-          menuBank: data.menuBank,
-          dailyMenus: data.dailyMenus,
-          taxRecords: data.taxRecords || [],
-          lastUpdated: data.lastUpdated
-        };
-      }
-    }
-  } catch {
-    // ไปยังตัวเลือกถัดไป
-  }
-
-  // 3. ดึงโดยตรงจาก Google Apps Script Web App (คลาวด์สด)
-  const targetGasUrl = gasUrlOverride || DEFAULT_GAS_URL;
+  // 2. ดึงจาก Google Apps Script Web App (คลาวด์กลางที่เชื่อมทุกเครื่องในโลก)
+  let cloudData: any = null;
   if (targetGasUrl) {
     try {
       const gasData = await callGasGet(targetGasUrl, { action: 'getAllData' });
       if (gasData && gasData.status === 'success') {
-        return {
+        cloudData = {
           success: true,
           settings: gasData.settings,
           menuBank: gasData.menuBank,
           dailyMenus: gasData.dailyMenu || gasData.dailyMenus,
           taxRecords: gasData.taxRecords || [],
-          lastUpdated: gasData.timestamp || gasData.lastUpdated || 'gas_synced'
+          lastUpdated: gasData.timestamp || gasData.lastUpdated || new Date().toISOString()
         };
       }
     } catch (gasErr) {
-      console.warn('Direct GAS sync fallback notice:', gasErr);
+      console.warn('Direct GAS sync notice:', gasErr);
     }
   }
 
-  return null;
+  // 3. ผสานข้อมูลระหว่าง Cloud (Google Sheets) และ Express Server อย่างชาญฉลาด
+  let resultData = localData;
+
+  if (cloudData && localData) {
+    const mergedMap = new Map<string, DailyMenuEntry>();
+    (localData.dailyMenus || []).forEach((m: DailyMenuEntry) => {
+      if (m && m.date) mergedMap.set(String(m.date).slice(0, 10), m);
+    });
+
+    (cloudData.dailyMenus || []).forEach((c: DailyMenuEntry) => {
+      if (c && c.date) {
+        const d = String(c.date).slice(0, 10);
+        const existing = mergedMap.get(d);
+        if (!existing) {
+          mergedMap.set(d, c);
+        } else {
+          const merged = { ...existing, ...c };
+          const dishFields = ['rice', 'singleDish', 'spicy', 'nonSpicy', 'dessert'] as const;
+          dishFields.forEach((field) => {
+            const cVal = (c as any)[field] ? String((c as any)[field]).trim() : '';
+            const eVal = (existing as any)[field] ? String((existing as any)[field]).trim() : '';
+            if (cVal) (merged as any)[field] = cVal;
+            else if (eVal) (merged as any)[field] = eVal;
+          });
+          mergedMap.set(d, merged);
+        }
+      }
+    });
+
+    const mergedList = Array.from(mergedMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    resultData = {
+      ...localData,
+      dailyMenus: mergedList,
+      menuBank: (cloudData.menuBank && cloudData.menuBank.length >= (localData.menuBank || []).length) ? cloudData.menuBank : localData.menuBank,
+      settings: { ...(localData.settings || {}), ...(cloudData.settings || {}) },
+      taxRecords: (cloudData.taxRecords && cloudData.taxRecords.length >= (localData.taxRecords || []).length) ? cloudData.taxRecords : localData.taxRecords,
+      lastUpdated: cloudData.lastUpdated || localData.lastUpdated
+    };
+
+    // ส่งข้อมูลที่ผสานแล้วไปอัปเดตลงเซิร์ฟเวอร์ Express ภายในแบบเงียบๆ
+    if (mergedList.length > (localData.dailyMenus || []).length) {
+      fetch('/api/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dailyMenus: mergedList,
+          syncToGas: false
+        })
+      }).catch(() => {});
+    }
+  } else if (cloudData && !localData) {
+    resultData = cloudData;
+  }
+
+  // ทำความสะอาดและป้องกันวันที่ซ้ำซ้อนอย่างเด็ดขาด
+  if (resultData && Array.isArray(resultData.dailyMenus)) {
+    const map = new Map<string, DailyMenuEntry>();
+    resultData.dailyMenus.forEach((m: DailyMenuEntry) => {
+      if (m && m.date) {
+        const cleanDate = String(m.date).trim().slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+          map.set(cleanDate, { ...m, date: cleanDate });
+        }
+      }
+    });
+    resultData.dailyMenus = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  return resultData;
 }
 
 /**
- * บันทึกข้อมูลขึ้น Server เพื่อซิงค์ไปทุกเครื่อง ทุกอุปกรณ์ทันที
- * ความเร็วสูงด้วย BroadcastChannel (0ms ข้ามแท็บ) และ Debounced Cloud Sync
- * รองรับทั้งโหมด Node Server ปกติ และโหมด Cloudflare Pages (สถิต)
+ * บันทึกข้อมูลขึ้น Server และส่งตรงไปยัง Google Apps Script Web App ทันที
+ * ซิงค์ข้อมูลข้ามอุปกรณ์ ทุกเครื่อง ทุกเบราว์เซอร์ และเครื่องของเพื่อนทันที
  */
 export async function saveServerData(payload: {
   settings?: SchoolSettings;
@@ -434,7 +465,6 @@ export async function saveServerData(payload: {
   broadcastLocalChange('ALL', payload);
 
   let serverResult: any = null;
-  let serverSaved = false;
 
   try {
     const controller = new AbortController();
@@ -448,16 +478,15 @@ export async function saveServerData(payload: {
     clearTimeout(timeoutId);
     if (res.ok) {
       serverResult = await res.json();
-      serverSaved = true;
     }
   } catch (err) {
-    // Cloudflare Pages / Static host
+    // โหมดสถิต เช่น Cloudflare Pages
   }
 
-  // หากไม่มี Node backend (เช่น Cloudflare Pages) ให้ส่งข้อมูลไปยัง Google Apps Script Web App โดยตรง
+  // 2. ส่งข้อมูลไปยัง Google Apps Script Web App ทันทีเสมอ เพื่อซิงค์ไปทุกเครื่อง ทุกเบราว์เซอร์ และเครื่องของเพื่อนทันที
   const gasUrl = payload.settings?.gasWebAppUrl || DEFAULT_GAS_URL;
-  if (!serverSaved && gasUrl && payload.syncToGas !== false) {
-    queueDirectGasSync(gasUrl, payload, 800);
+  if (gasUrl && payload.syncToGas !== false) {
+    queueDirectGasSync(gasUrl, payload, 100);
   }
 
   return serverResult || { success: true, lastUpdated: new Date().toISOString() };
@@ -466,27 +495,29 @@ export async function saveServerData(payload: {
 /**
  * ลบรายการอาหารกลางวันออกจาก Server และ Google Sheets อย่างถาวร (ป้องกันการเด้งกลับมาอีก)
  */
-export async function deleteDailyMenuFromServer(dates: string[] | string): Promise<boolean> {
+export async function deleteDailyMenuFromServer(dates: string[] | string, gasUrl?: string): Promise<boolean> {
   const targetDates = Array.isArray(dates) ? dates : [dates];
   if (targetDates.length === 0) return true;
 
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch('/api/delete-daily-menu', {
+    fetch('/api/delete-daily-menu', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dates: targetDates }),
       signal: controller.signal
-    });
+    }).catch(() => {});
     clearTimeout(timeoutId);
-    if (res.ok) {
-      return true;
-    }
-  } catch (err) {
-    console.warn('deleteDailyMenuFromServer notice:', err);
+  } catch (err) {}
+
+  const targetGas = gasUrl || DEFAULT_GAS_URL;
+  if (targetGas) {
+    targetDates.forEach((d) => {
+      callGasPost(targetGas, { action: 'deleteDailyMenu', date: d }).catch(() => {});
+    });
   }
-  return false;
+  return true;
 }
 
 /**

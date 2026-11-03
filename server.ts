@@ -227,7 +227,7 @@ async function callGas(url: string, payload: any): Promise<any> {
 let isSyncingGas = false;
 async function syncFromGas(gasUrl?: string): Promise<boolean> {
   if (isSyncingGas) return false;
-  if (Date.now() - lastServerSaveTime < 60000) return false;
+  if (Date.now() - lastServerSaveTime < 2000) return false;
   isSyncingGas = true;
 
   try {
@@ -335,12 +335,12 @@ async function startServer() {
   // Always perform sync from Google Sheets on server startup
   syncFromGas().catch((err) => console.warn('Initial GAS sync notice:', err));
 
-  // Periodic automatic synchronization from Google Sheets (every 15s) across all devices
+  // Periodic automatic synchronization from Google Sheets (every 6s) across all devices
   setInterval(() => {
-    if (Date.now() - lastServerSaveTime > 8000) {
+    if (Date.now() - lastServerSaveTime > 2000) {
       syncFromGas().catch((err) => console.warn('Periodic GAS sync notice:', err));
     }
-  }, 15000);
+  }, 6000);
 
   // -----------------------------------------------------------------
   // 0. GET /api/events - Real-time Server-Sent Events (SSE) Stream

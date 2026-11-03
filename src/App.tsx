@@ -972,7 +972,7 @@ export default function App() {
     showToast('ลบข้อมูลเรียบร้อย', `ลบเมนูวันที่ ${cleanDate} แล้ว`, 'info');
 
     // 3. ส่งคำสั่งลบถาวรไปยัง Express backend
-    deleteDailyMenuFromServer(cleanDate);
+    deleteDailyMenuFromServer(cleanDate, settings.gasWebAppUrl);
 
     // 4. บันทึกข้อมูลและส่ง deletedDates
     const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, deletedDates: [cleanDate], syncToGas: true });
@@ -1021,8 +1021,8 @@ export default function App() {
     }
     showToast('ลบข้อมูลเรียบร้อย', `ลบรายการอาหารที่เลือกจำนวน ${dates.length} วันแล้ว`, 'info');
 
-    // 3. ส่งคำสั่งลบถาวรไปยัง Express backend
-    deleteDailyMenuFromServer(cleanDates);
+    // 3. ส่งคำสั่งลบถาวรไปยัง Express backend และ Google Sheets
+    deleteDailyMenuFromServer(cleanDates, settings.gasWebAppUrl);
 
     // 4. บันทึกข้อมูลและส่ง deletedDates
     const saveRes = await saveServerData({ settings, menuBank, dailyMenus: updated, deletedDates: cleanDates, syncToGas: true });
