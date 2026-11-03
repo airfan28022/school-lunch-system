@@ -711,16 +711,22 @@ export const PrintReport: React.FC<PrintReportProps> = ({
     if (!previewDocRef.current) return;
     setIsDownloadingPdf(true);
     try {
+      // 1. รอให้ฟอนต์ Sarabun และ Prompt โหลดเสร็จสมบูรณ์ 100% ก่อนจับภาพ เพื่อไม่ให้ฟอนต์เพี้ยน
+      if (document.fonts?.ready) {
+        await document.fonts.ready;
+      }
+
       const element = previewDocRef.current;
 
+      // 2. สร้าง Canvas ด้วยความละเอียดสูง (scale 2.5) ตามขนาดกระดาษ A4 มาตรฐาน (794px ที่ 96 DPI)
       const canvas = await html2canvasPro(element, {
-        scale: 2,
+        scale: 2.5,
         useCORS: true,
         allowTaint: true,
         backgroundColor: '#ffffff',
         logging: false,
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight
+        windowWidth: 794,
+        imageTimeout: 15000,
       });
 
       const imgData = canvas.toDataURL('image/png', 1.0);
@@ -733,19 +739,17 @@ export const PrintReport: React.FC<PrintReportProps> = ({
 
       const pdfWidth = 210;
       const pdfHeight = 297;
-      const margin = 8;
-      const printableWidth = pdfWidth - margin * 2;
-      const printableHeight = pdfHeight - margin * 2;
 
       const canvasWidth = canvas.width;
       const canvasHeight = canvas.height;
-      const totalPdfHeight = (canvasHeight * printableWidth) / canvasWidth;
+      const totalPdfHeight = (canvasHeight * pdfWidth) / canvasWidth;
 
-      if (totalPdfHeight <= printableHeight) {
-        pdf.addImage(imgData, 'PNG', margin, margin, printableWidth, totalPdfHeight);
+      // 3. วาดภาพลงหน้า PDF แบบ 1:1 เสมือนหน้าตัวอย่าง 1000% (ระยะขอบถูกจัดวางไว้ในหน้ากระดาษเรียบร้อยแล้ว)
+      if (totalPdfHeight <= pdfHeight) {
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, totalPdfHeight, undefined, 'FAST');
       } else {
         let currentY = 0;
-        const pageCanvasHeight = (printableHeight * canvasWidth) / printableWidth;
+        const pageCanvasHeight = (pdfHeight * canvasWidth) / pdfWidth;
 
         while (currentY < canvasHeight) {
           const sliceCanvas = document.createElement('canvas');
@@ -771,12 +775,12 @@ export const PrintReport: React.FC<PrintReportProps> = ({
           }
 
           const sliceImgData = sliceCanvas.toDataURL('image/png', 1.0);
-          const slicePdfHeight = (sliceHeight * printableWidth) / canvasWidth;
+          const slicePdfHeight = (sliceHeight * pdfWidth) / canvasWidth;
 
           if (currentY > 0) {
             pdf.addPage();
           }
-          pdf.addImage(sliceImgData, 'PNG', margin, margin, printableWidth, slicePdfHeight);
+          pdf.addImage(sliceImgData, 'PNG', 0, 0, pdfWidth, slicePdfHeight, undefined, 'FAST');
           currentY += sliceHeight;
         }
       }
@@ -1060,13 +1064,13 @@ export const PrintReport: React.FC<PrintReportProps> = ({
         className="bg-white p-3 sm:p-8 rounded-2xl border border-slate-200 shadow-sm print-page-container mx-auto max-w-[210mm]"
       >
         {/* Printable Header */}
-        <div className="print-header text-center pb-3 mb-4 border-b-2 border-slate-900">
-          <h1 className="text-base sm:text-2xl font-bold text-slate-900 text-center tracking-tight leading-snug">
+        <div className="print-header text-center pb-1.5 mb-2.5">
+          <h1 className="text-base sm:text-2xl font-bold text-slate-900 text-center tracking-normal leading-snug">
             รายงานอาหารกลางวัน ประจำเดือน {thaiMonthName} {buddhistYear}
           </h1>
-          {settings.schoolName && (
-            <p className="text-xs sm:text-sm font-semibold text-slate-700 text-center mt-1">
-              {settings.schoolName}
+          {(settings.schoolName || settings.department) && (
+            <p className="text-xs sm:text-sm font-semibold text-slate-800 text-center mt-0.5 tracking-normal leading-snug">
+              {[settings.schoolName, settings.department].filter(Boolean).join(' ')}
             </p>
           )}
         </div>
@@ -1265,26 +1269,26 @@ export const PrintReport: React.FC<PrintReportProps> = ({
 
             {/* 2. Desktop Table View & Print Engine (hidden md:block print:block) */}
             <div className="hidden md:block print:block overflow-x-auto">
-              <table className="a4-print-table w-full border-collapse text-left">
+              <table className="a4-print-table w-full border-collapse text-left font-['Sarabun',sans-serif]">
                 <thead>
-                  <tr className="bg-slate-100 text-slate-900 font-bold border border-slate-900 text-xs sm:text-sm">
+                  <tr className="bg-white text-black font-bold border-b-2 border-black text-xs sm:text-sm">
                     {/* 1. วันที่ */}
-                    <th className="col-print-date p-2 sm:p-2.5 border border-slate-900 text-center">
+                    <th className="col-print-date p-2 sm:p-2.5 border border-black text-center text-black font-bold">
                       วันที่
                     </th>
 
                     {/* 2. รายการอาหาร */}
-                    <th className="col-print-menu p-2.5 sm:p-3 border border-slate-900 text-center">
+                    <th className="col-print-menu p-2.5 sm:p-3 border border-black text-center text-black font-bold">
                       รายการอาหาร
                     </th>
 
                     {/* 3. หมายเหตุ */}
-                    <th className="col-print-note p-2 sm:p-2.5 border border-slate-900 text-center">
+                    <th className="col-print-note p-2 sm:p-2.5 border border-black text-center text-black font-bold">
                       หมายเหตุ
                     </th>
 
                     {/* Screen-Only Edit Action Column */}
-                    <th className="no-print col-print-action p-2 border border-slate-300 text-center w-16 bg-slate-50 text-slate-600">
+                    <th className="no-print col-print-action p-2 border border-slate-300 text-center w-16 bg-slate-50 text-slate-600 font-medium">
                       แก้ไข
                     </th>
                   </tr>
@@ -1301,20 +1305,22 @@ export const PrintReport: React.FC<PrintReportProps> = ({
                     return (
                       <tr 
                         key={entry.date} 
-                        className={`border border-slate-800 text-xs sm:text-sm leading-normal ${
-                          isMonday ? 'print-monday-row bg-amber-100/70 border-t-2 border-amber-400' : 'hover:bg-slate-50/60'
+                        className={`border border-black text-xs sm:text-sm leading-relaxed ${
+                          isMonday ? 'print-monday-row bg-[#fef9c3]' : 'bg-white hover:bg-slate-50/60'
                         }`}
                       >
                         {/* 1. วันที่: รูปแบบสั้น เช่น จ. 1/9/69 */}
-                        <td className={`col-print-date p-2 sm:p-2.5 border border-slate-700 font-bold text-center whitespace-nowrap ${
-                          isMonday ? 'bg-amber-200/60 text-amber-950' : 'bg-slate-50/40 text-slate-900'
+                        <td className={`col-print-date p-2 sm:p-2.5 border border-black font-bold text-center whitespace-nowrap ${
+                          isMonday ? 'bg-[#fef08a] text-black' : 'bg-white text-black'
                         }`}>
                           {shortDate}
                         </td>
 
                         {/* 2. รายการอาหาร */}
                         <td 
-                          className="col-print-menu p-2.5 sm:p-3 border border-slate-700 text-slate-900 font-medium cursor-pointer hover:bg-orange-50/60 transition-colors group"
+                          className={`col-print-menu p-2.5 sm:p-3 border border-black text-black font-medium cursor-pointer transition-colors group ${
+                            isMonday ? 'bg-[#fef9c3]' : 'bg-white hover:bg-amber-50/30'
+                          }`}
                           onClick={() => handleOpenEdit(entry)}
                           title="คลิกเพื่อแก้ไขรายการอาหารวันนี้"
                         >
@@ -1327,7 +1333,9 @@ export const PrintReport: React.FC<PrintReportProps> = ({
                         </td>
 
                         {/* 3. หมายเหตุ */}
-                        <td className="col-print-note p-2 border border-slate-700 text-center text-xs text-slate-600">
+                        <td className={`col-print-note p-2 border border-black text-center text-xs text-black ${
+                          isMonday ? 'bg-[#fef9c3]' : 'bg-white'
+                        }`}>
                           {entry.note || ''}
                         </td>
 
@@ -1696,84 +1704,86 @@ export const PrintReport: React.FC<PrintReportProps> = ({
           </div>
 
           {/* 2. Scrollable Document Preview Area */}
-          <div className="flex-1 overflow-y-auto p-3 sm:p-8 bg-slate-200/90 flex justify-center items-start">
-            {/* The Document Paper (A4 aspect-ratio look) */}
-            <div
-              ref={previewDocRef}
-              className="bg-white w-full max-w-[210mm] p-6 sm:p-10 shadow-2xl rounded-sm border border-slate-300 text-slate-900 mx-auto"
-              style={{ minHeight: '297mm' }}
-            >
-              {/* Document Header */}
-              <div className="text-center pb-3 mb-4 border-b-2 border-slate-900">
-                <h1 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight leading-snug">
-                  รายงานอาหารกลางวัน ประจำเดือน {thaiMonthName} {buddhistYear}
-                </h1>
-                {settings.schoolName && (
-                  <p className="text-xs sm:text-sm font-semibold text-slate-800 mt-1">
-                    {settings.schoolName}
-                  </p>
-                )}
-                {settings.department && (
-                  <p className="text-[11px] sm:text-xs text-slate-600">
-                    {settings.department}
-                  </p>
-                )}
-              </div>
+          <div className="flex-1 overflow-auto p-3 sm:p-8 bg-slate-300/80 flex justify-center items-start">
+            {/* The Document Paper Container with realistic drop-shadow (shadow is outside previewDocRef so canvas captures clean A4 sheet) */}
+            <div className="bg-white shadow-2xl rounded-xs border border-slate-300 overflow-hidden my-auto sm:my-3">
+              <div
+                ref={previewDocRef}
+                className="bg-white text-black font-['Sarabun',sans-serif] box-border"
+                style={{
+                  width: '794px', // Exact standard A4 width at 96 DPI
+                  minHeight: '1123px', // Exact standard A4 height at 96 DPI
+                  padding: '24px 36px', // Compact, perfectly proportioned margins for 1-page fit
+                  backgroundColor: '#ffffff',
+                }}
+              >
+                {/* Document Header */}
+                <div className="text-center pb-2 mb-3">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-black tracking-normal leading-snug">
+                    รายงานอาหารกลางวัน ประจำเดือน {thaiMonthName} {buddhistYear}
+                  </h1>
+                  {(settings.schoolName || settings.department) && (
+                    <p className="text-sm sm:text-base font-semibold text-black mt-1 tracking-normal leading-snug">
+                      {[settings.schoolName, settings.department].filter(Boolean).join(' ')}
+                    </p>
+                  )}
+                </div>
 
-              {/* Document Table */}
-              <table className="w-full border-collapse border border-slate-900 text-left text-xs sm:text-sm">
-                <thead>
-                  <tr className="bg-slate-100 text-slate-900 font-bold border border-slate-900">
-                    <th className="p-2 sm:p-2.5 border border-slate-900 text-center w-28 sm:w-32 whitespace-nowrap">
-                      วันที่
-                    </th>
-                    <th className="p-2.5 sm:p-3 border border-slate-900 text-center">
-                      รายการอาหาร
-                    </th>
-                    <th className="p-2 sm:p-2.5 border border-slate-900 text-center w-24 sm:w-28 whitespace-nowrap">
-                      หมายเหตุ
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {monthEntries.map((entry) => {
-                    const shortDate = formatShortDate(entry.date);
-                    const parts = entry.date.split('-').map(Number);
-                    const entryY = parts[0] > 2400 ? parts[0] - 543 : parts[0];
-                    const d = new Date(entryY, parts[1] - 1, parts[2], 12, 0, 0);
-                    const isMonday = d.getDay() === 1;
-                    const mealString = formatMealList(entry);
+                {/* Document Table: Black & White ONLY, except Monday highlighted in Yellow */}
+                <table className="w-full border-collapse border border-black text-left text-[14.5px] sm:text-[15px] leading-snug">
+                  <thead>
+                    <tr className="bg-white text-black font-bold border-b-2 border-black">
+                      <th className="py-2 px-2.5 border border-black text-center w-32 whitespace-nowrap font-bold text-black tracking-normal text-sm sm:text-base">
+                        วันที่
+                      </th>
+                      <th className="py-2 px-2.5 border border-black text-center font-bold text-black tracking-normal text-sm sm:text-base">
+                        รายการอาหาร
+                      </th>
+                      <th className="py-2 px-2.5 border border-black text-center w-28 whitespace-nowrap font-bold text-black tracking-normal text-sm sm:text-base">
+                        หมายเหตุ
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {monthEntries.map((entry) => {
+                      const shortDate = formatShortDate(entry.date);
+                      const parts = entry.date.split('-').map(Number);
+                      const entryY = parts[0] > 2400 ? parts[0] - 543 : parts[0];
+                      const d = new Date(entryY, parts[1] - 1, parts[2], 12, 0, 0);
+                      const isMonday = d.getDay() === 1;
+                      const mealString = formatMealList(entry);
 
-                    return (
-                      <tr
-                        key={`preview-${entry.date}`}
-                        className={`border border-slate-800 text-xs sm:text-sm leading-normal ${
-                          isMonday ? 'bg-amber-100/70 border-t-2 border-amber-400' : ''
-                        }`}
-                      >
-                        <td
-                          className={`p-2 sm:p-2.5 border border-slate-700 font-bold text-center whitespace-nowrap ${
-                            isMonday ? 'bg-amber-200/60 text-amber-950' : 'bg-slate-50/40 text-slate-900'
+                      return (
+                        <tr
+                          key={`preview-${entry.date}`}
+                          className={`border border-black text-[14.5px] sm:text-[15px] leading-snug ${
+                            isMonday ? 'bg-[#fef9c3]' : 'bg-white'
                           }`}
                         >
-                          {shortDate}
-                        </td>
-                        <td className="p-2.5 sm:p-3 border border-slate-700 text-slate-900 font-medium">
-                          {mealString}
-                        </td>
-                        <td className="p-2 border border-slate-700 text-center text-xs text-slate-600">
-                          {entry.note || ''}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          <td
+                            className={`py-1.5 px-2 border border-black font-bold text-center whitespace-nowrap tracking-wide text-[14.5px] sm:text-[15px] ${
+                              isMonday ? 'bg-[#fef08a] text-black' : 'bg-white text-black'
+                            }`}
+                          >
+                            {shortDate}
+                          </td>
+                          <td className={`py-1.5 px-2.5 border border-black text-black font-medium leading-normal tracking-normal text-[14.5px] sm:text-[15px] ${
+                            isMonday ? 'bg-[#fef9c3]' : 'bg-white'
+                          }`}>
+                            {mealString}
+                          </td>
+                          <td className={`py-1.5 px-2 border border-black text-center text-xs sm:text-sm text-black tracking-normal ${
+                            isMonday ? 'bg-[#fef9c3]' : 'bg-white'
+                          }`}>
+                            {entry.note || ''}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
 
-              {/* Document Footer */}
-              <div className="mt-6 pt-3 border-t border-slate-300 flex items-center justify-between text-[11px] text-slate-500">
-                <span>ระบบบริหารจัดการอาหารกลางวันโรงเรียน</span>
-                <span>จำนวน {monthEntries.length} วันทำการ</span>
+
               </div>
             </div>
           </div>

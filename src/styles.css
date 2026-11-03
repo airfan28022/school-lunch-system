@@ -67,7 +67,7 @@ body {
  * ------------------------------------------------------------- */
 @page {
   size: A4 portrait;
-  margin: 10mm 15mm 10mm 15mm;
+  margin: 6mm 10mm 6mm 10mm;
 }
 
 @media print {
@@ -76,8 +76,8 @@ body {
   body {
     background: #ffffff !important;
     color: #000000 !important;
-    font-size: 10pt !important;
-    line-height: 1.2 !important;
+    font-size: 11.5pt !important;
+    line-height: 1.3 !important;
     font-family: 'Sarabun', 'Prompt', serif !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -127,9 +127,9 @@ body {
 
   /* Print Header styling: MUST avoid break after so table stays with header on Page 1 */
   .print-header {
-    border-bottom: 2pt solid #000000 !important;
-    padding-bottom: 4px !important;
-    margin-bottom: 8px !important;
+    border-bottom: none !important;
+    padding-bottom: 2px !important;
+    margin-bottom: 6px !important;
     text-align: center !important;
     page-break-after: avoid !important;
     break-after: avoid-page !important;
@@ -137,15 +137,15 @@ body {
   }
 
   .print-header h1 {
-    font-size: 16pt !important;
+    font-size: 18pt !important;
     font-weight: bold !important;
-    margin: 0 0 3px 0 !important;
+    margin: 0 0 2px 0 !important;
     color: #000000 !important;
     text-align: center !important;
   }
 
   .print-header p {
-    font-size: 11pt !important;
+    font-size: 12pt !important;
     margin: 0 !important;
     color: #333333 !important;
     text-align: center !important;
@@ -159,7 +159,7 @@ body {
     border-collapse: collapse !important;
     border: 1.5pt solid #000000 !important;
     margin: 0 auto !important;
-    font-size: 10.5pt !important;
+    font-size: 11.5pt !important;
     line-height: 1.35 !important;
     page-break-before: avoid !important;
     break-before: avoid-page !important;
@@ -182,12 +182,12 @@ body {
   }
 
   table.a4-print-table th {
-    background-color: #f1f5f9 !important;
+    background-color: #ffffff !important;
     color: #000000 !important;
-    font-size: 11pt !important;
+    font-size: 12.5pt !important;
     font-weight: bold !important;
     border: 1pt solid #000000 !important;
-    padding: 6px 4px !important;
+    padding: 4px 3px !important;
     text-align: center !important;
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
@@ -195,10 +195,13 @@ body {
   }
 
   table.a4-print-table td {
+    background-color: #ffffff !important;
+    color: #000000 !important;
     border: 1pt solid #000000 !important;
-    padding: 6px 6px !important;
+    padding: 3px 5px !important;
     vertical-align: middle !important;
-    font-size: 10.5pt !important;
+    font-size: 11.5pt !important;
+    line-height: 1.35 !important;
     box-sizing: border-box !important;
   }
 
@@ -208,26 +211,35 @@ body {
     background-color: #fef9c3 !important; /* soft yellow */
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
-    border-top: 2pt solid #ca8a04 !important;
+    border-top: 1.5pt solid #000000 !important;
+  }
+
+  tr.print-monday-row td.col-print-date {
+    background-color: #fef08a !important; /* warm yellow */
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   /* Specific column widths for 3-column table: วันที่, รายการอาหาร, หมายเหตุ (Exact 100%) */
   .col-print-date {
-    width: 16% !important;
+    width: 18% !important;
     text-align: center !important;
     white-space: nowrap !important;
     font-weight: 700 !important;
-    font-size: 10pt !important;
-    padding: 6px 3px !important;
+    font-size: 11.5pt !important;
+    letter-spacing: 0.025em !important;
+    padding: 3px 4px !important;
     border-left: 1.5pt solid #000000 !important;
     border-right: 1pt solid #000000 !important;
     box-sizing: border-box !important;
   }
 
   .col-print-menu {
-    width: 68% !important;
+    width: 66% !important;
     text-align: left !important;
-    padding: 6px 8px !important;
+    padding: 3px 6px !important;
+    line-height: 1.35 !important;
+    letter-spacing: 0.012em !important;
     word-break: break-word !important;
     overflow-wrap: break-word !important;
     white-space: normal !important;
@@ -243,8 +255,9 @@ body {
   .col-print-note {
     width: 16% !important;
     text-align: center !important;
-    font-size: 9.5pt !important;
-    padding: 6px 4px !important;
+    font-size: 10.5pt !important;
+    padding: 3px 4px !important;
+    letter-spacing: 0.012em !important;
     word-break: break-word !important;
     overflow-wrap: break-word !important;
     border-right: 1.5pt solid #000000 !important;
