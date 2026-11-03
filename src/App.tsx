@@ -31,6 +31,7 @@ import {
   saveSingleDailyMenuDirect,
   saveSingleMenuItemDirect,
   subscribeToLocalSync,
+  subscribeToRealtimeSync,
   uploadLogoToServer,
   uploadPhotoToServer,
   testGasConnection,
@@ -198,6 +199,7 @@ export default function App() {
 
   // Real-time synchronization state
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(true);
 
   // Core Data States with localStorage persistence as fast-boot cache
   const [settings, setSettings] = useState<SchoolSettings>(() => {
@@ -516,13 +518,108 @@ export default function App() {
 
   // -------------------------------------------------------------
   // Real-Time Cross-Device Synchronization
-  // ซิงค์ข้อมูลข้ามอุปกรณ์ ทุกเบราว์เซอร์ และทุกบัญชีอีเมล
+  // ซิงค์ข้อมูลข้ามอุปกรณ์ ทุกเบราว์เซอร์ และทุกบัญชีอีเมลแบบเรียลไทม์ 0ms
   // -------------------------------------------------------------
   useEffect(() => {
     let isMounted = true;
     let isPulling = false;
 
-    // 0. ซิงค์ข้ามแท็บในเครื่องเดียวกันทันทีด้วย BroadcastChannel (0ms ละเอียดระดับเรียลไทม์)
+    // ฟังก์ชันช่วยผสานและอัปเดตข้อมูลอาหารกลางวันจาก Server อย่างปลอดภัย ไม่ให้เมนูหายเด็ดขาด
+    const applyIncomingServerPayload = (data: any, isInitial = false) => {
+      if (!isMounted || !data) return;
+
+      const shouldUpdate = isInitial || (data.lastUpdated && data.lastUpdated !== lastServerTimestampRef.current);
+      if (shouldUpdate) {
+        if (data.lastUpdated) {
+          lastServerTimestampRef.current = data.lastUpdated;
+        }
+
+        if (data.settings && Object.keys(data.settings).length > 0) {
+          setSettings((prev) => ({ ...prev, ...data.settings }));
+          if (data.settings.gasWebAppUrl) {
+            setIsGasConnected(true);
+          }
+        }
+
+        if (Array.isArray(data.menuBank) && data.menuBank.length > 0) {
+          setMenuBank(data.menuBank);
+        }
+
+        let delSet = new Set<string>();
+        if (Array.isArray(data.deletedDates)) {
+          delSet = new Set(data.deletedDates);
+          setDeletedDates(delSet);
+          try {
+            localStorage.setItem(STORAGE_KEY_DELETED_DATES, JSON.stringify(data.deletedDates));
+          } catch {}
+        } else {
+          try {
+            const savedDel = localStorage.getItem(STORAGE_KEY_DELETED_DATES);
+            if (savedDel) delSet = new Set<string>(JSON.parse(savedDel));
+          } catch {}
+        }
+
+        if (Array.isArray(data.dailyMenus)) {
+          const clean = data.dailyMenus
+            .filter(
+              (m: DailyMenuEntry) => m && m.date && !delSet.has(m.date.trim().slice(0, 10))
+            )
+            .map(cleanDailyEntryDishes);
+
+          setDailyMenus((prev) => {
+            const mergedMap = new Map<string, DailyMenuEntry>();
+
+            // 1. เก็บรายการเดิมในเครื่องที่ไม่ได้ถูกสั่งลบ
+            prev.forEach((item) => {
+              if (item && item.date && !delSet.has(item.date.trim().slice(0, 10))) {
+                mergedMap.set(item.date.trim().slice(0, 10), item);
+              }
+            });
+
+            // 2. ผสานข้อมูลจาก Server อย่างชาญฉลาดโดยรักษาเมนูอาหารเดิมไว้เสมอ
+            clean.forEach((s: DailyMenuEntry) => {
+              const sDate = s.date.trim().slice(0, 10);
+              const localItem = mergedMap.get(sDate);
+              if (!localItem) {
+                mergedMap.set(sDate, s);
+              } else {
+                mergedMap.set(sDate, mergeDailyEntry(localItem, s));
+              }
+            });
+
+            const mergedList = Array.from(mergedMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+            if (JSON.stringify(prev) === JSON.stringify(mergedList)) {
+              return prev;
+            }
+            try {
+              localStorage.setItem(STORAGE_KEY_DAILY_MENUS, JSON.stringify(mergedList));
+            } catch {}
+            return mergedList;
+          });
+        }
+
+        if (Array.isArray(data.taxRecords)) {
+          setTaxRecords(data.taxRecords);
+        }
+      }
+    };
+
+    // 0.1 ซิงค์ข้ามอุปกรณ์ ทุกเบราว์เซอร์ ทุกอีเมลแบบเรียลไทม์ 0ms ด้วย Server-Sent Events (SSE)
+    const unsubscribeRealtime = subscribeToRealtimeSync(
+      (serverData, eventType) => {
+        if (!isMounted || !serverData) return;
+        // หากผู้ใช้เพิ่งกดสุ่มหรือบันทึกใหม่ในเครื่องนี้เองภายใน 1.5 วินาที ให้ข้ามเพื่อไม่ชนกับคำขอในมือ
+        if (Date.now() - lastLocalSaveTimeRef.current < 1500 && eventType !== 'INIT_STATE') {
+          return;
+        }
+        applyIncomingServerPayload(serverData, eventType === 'INIT_STATE');
+      },
+      (connected) => {
+        if (isMounted) setIsRealtimeConnected(connected);
+      }
+    );
+
+    // 0.2 ซิงค์ข้ามแท็บในเครื่องเดียวกันทันทีด้วย BroadcastChannel (0ms ละเอียดระดับเรียลไทม์)
     const unsubscribeSync = subscribeToLocalSync((event) => {
       if (!isMounted) return;
       if (event.type === 'ALL' && event.payload) {
@@ -554,8 +651,8 @@ export default function App() {
 
     const pullServerData = async (isInitial = false) => {
       if (isPulling) return;
-      // ป้องกันการดึงข้อมูลทับข้อมูลที่เพิ่งสุ่มหรือบันทึกใหม่ในเครื่องภายใน 60 วินาที
-      if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 60000) {
+      // ป้องกันการดึงข้อมูลทับข้อมูลที่เพิ่งสุ่มหรือบันทึกใหม่ในเครื่องภายใน 1.5 วินาที
+      if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 1500) {
         return;
       }
 
@@ -565,73 +662,11 @@ export default function App() {
         const data = await fetchServerData(settings.gasWebAppUrl);
         if (!isMounted || !data || !data.success) return;
 
-        // ตรวจสอบซ้ำอีกครั้ง: หากระหว่าง fetch ข้อมูลผู้ใช้มีการกดสุ่มหรือบันทึกใหม่ ห้ามเขียนทับข้อมูลใหม่เด็ดขาด
-        if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 60000) {
+        if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 1500) {
           return;
         }
 
-        const shouldUpdate = isInitial || (data.lastUpdated && data.lastUpdated !== lastServerTimestampRef.current);
-        if (shouldUpdate) {
-          lastServerTimestampRef.current = data.lastUpdated || '';
-
-          if (data.settings && Object.keys(data.settings).length > 0) {
-            setSettings((prev) => ({ ...prev, ...data.settings }));
-            if (data.settings.gasWebAppUrl) {
-              setIsGasConnected(true);
-            }
-          }
-
-          if (Array.isArray(data.menuBank) && data.menuBank.length > 0) {
-            setMenuBank(data.menuBank);
-          }
-
-          if (Array.isArray(data.dailyMenus)) {
-            let currentDel = deletedDates;
-            try {
-              const savedDel = localStorage.getItem(STORAGE_KEY_DELETED_DATES);
-              if (savedDel) currentDel = new Set<string>(JSON.parse(savedDel));
-            } catch {}
-            const clean = data.dailyMenus
-              .filter(
-                (m: DailyMenuEntry) => m && m.date && !currentDel.has(m.date.trim().slice(0, 10))
-              )
-              .map(cleanDailyEntryDishes);
-
-            // Non-destructively merge incoming server data with local state
-            // Never allow an empty or incomplete server payload to wipe out locally randomized meals!
-            setDailyMenus((prev) => {
-              const mergedMap = new Map<string, DailyMenuEntry>();
-
-              // 1. First, preserve all valid local items
-              prev.forEach((item) => {
-                if (item && item.date && !currentDel.has(item.date.trim().slice(0, 10))) {
-                  mergedMap.set(item.date.trim().slice(0, 10), item);
-                }
-              });
-
-              // 2. Merge server entries intelligently
-              clean.forEach((s: DailyMenuEntry) => {
-                const sDate = s.date.trim().slice(0, 10);
-                const localItem = mergedMap.get(sDate);
-                if (!localItem) {
-                  mergedMap.set(sDate, s);
-                } else {
-                  mergedMap.set(sDate, mergeDailyEntry(localItem, s));
-                }
-              });
-
-              const mergedList = Array.from(mergedMap.values()).sort((a, b) => a.date.localeCompare(b.date));
-              if (JSON.stringify(prev) === JSON.stringify(mergedList)) {
-                return prev;
-              }
-              return mergedList;
-            });
-          }
-
-          if (Array.isArray(data.taxRecords)) {
-            setTaxRecords(data.taxRecords);
-          }
-        }
+        applyIncomingServerPayload(data, isInitial);
       } catch (err) {
         console.warn('Central server sync poll warning:', err);
       } finally {
@@ -657,15 +692,16 @@ export default function App() {
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
 
-    // 4. Periodic polling ทุก 8 วินาทีเมื่อเปิดหน้าจออยู่ (ซิงค์เรียลไทม์ทุกเครื่องทุกอุปกรณ์)
+    // 4. Periodic polling ทุก 5 วินาทีเมื่อเปิดหน้าจออยู่ (สำรองความปลอดภัยกรณี SSE หลุด)
     const intervalId = setInterval(() => {
       if (document.visibilityState === 'visible') {
         pullServerData(false);
       }
-    }, 8000);
+    }, 5000);
 
     return () => {
       isMounted = false;
+      unsubscribeRealtime();
       unsubscribeSync();
       window.removeEventListener('focus', onWindowFocus);
       document.removeEventListener('visibilitychange', onVisibilityChange);
@@ -1358,6 +1394,7 @@ export default function App() {
         onTabChange={setActiveTab}
         isGasConnected={isGasConnected}
         isSyncing={isSyncing}
+        isRealtimeConnected={isRealtimeConnected}
         onManualSync={handleManualSync}
         onLogout={() => setShowLogoutConfirm(true)}
         username={currentUser}

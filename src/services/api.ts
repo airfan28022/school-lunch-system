@@ -208,6 +208,94 @@ export function subscribeToLocalSync(callback: (event: { type: string; payload: 
   };
 }
 
+/**
+ * ซิงค์ข้อมูลข้ามอุปกรณ์ ทุกเบราว์เซอร์ ทุกอีเมลแบบเรียลไทม์ผ่าน Server-Sent Events (SSE)
+ * ไม่ว่าจะเปิดจากมือถือ แท็บเล็ต คอมพิวเตอร์ หรือเบราว์เซอร์ใด ข้อมูลจะเด้งซิงค์ตรงกันทันที 0ms
+ */
+export function subscribeToRealtimeSync(
+  onUpdate: (payload: any, eventType: string) => void,
+  onStatusChange?: (connected: boolean) => void
+): () => void {
+  if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
+    return () => {};
+  }
+
+  let eventSource: EventSource | null = null;
+  let reconnectTimer: any = null;
+  let isStopped = false;
+
+  function connect() {
+    if (isStopped) return;
+
+    try {
+      eventSource = new EventSource('/api/events');
+
+      eventSource.onopen = () => {
+        onStatusChange?.(true);
+      };
+
+      eventSource.addEventListener('INIT_STATE', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          onUpdate(data, 'INIT_STATE');
+        } catch (err) {
+          console.warn('SSE INIT_STATE parse error:', err);
+        }
+      });
+
+      eventSource.addEventListener('DATA_UPDATED', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          onUpdate(data, 'DATA_UPDATED');
+        } catch (err) {
+          console.warn('SSE DATA_UPDATED parse error:', err);
+        }
+      });
+
+      eventSource.onmessage = (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          onUpdate(data, 'MESSAGE');
+        } catch {}
+      };
+
+      eventSource.onerror = () => {
+        onStatusChange?.(false);
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        if (!isStopped && !reconnectTimer) {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connect();
+          }, 3000);
+        }
+      };
+    } catch (err) {
+      onStatusChange?.(false);
+      if (!isStopped && !reconnectTimer) {
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connect();
+        }, 4000);
+      }
+    }
+  }
+
+  connect();
+
+  return () => {
+    isStopped = true;
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (eventSource) {
+      eventSource.close();
+      eventSource = null;
+    }
+    onStatusChange?.(false);
+  };
+}
+
 let gasDebounceTimer: any = null;
 let pendingGasPayload: any = null;
 

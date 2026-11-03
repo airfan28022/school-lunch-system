@@ -15,6 +15,7 @@ interface HeaderProps {
   onTabChange: (tab: 'repository' | 'planner' | 'report' | 'tax' | 'settings') => void;
   isGasConnected: boolean;
   isSyncing?: boolean;
+  isRealtimeConnected?: boolean;
   onManualSync?: () => void;
   onLogout?: () => void;
   username?: string;
@@ -26,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
   onTabChange,
   isGasConnected,
   isSyncing = false,
+  isRealtimeConnected = true,
   onManualSync,
   onLogout,
   username = 'Admin'
@@ -117,14 +119,14 @@ export const Header: React.FC<HeaderProps> = ({
                 id="btn-quick-sync"
                 onClick={onManualSync}
                 disabled={isSyncing}
-                title={isSyncing ? 'กำลังซิงค์ข้อมูล...' : 'ซิงค์ข้อมูลทันที'}
+                title={isSyncing ? 'กำลังซิงค์ข้อมูล...' : isRealtimeConnected ? 'เชื่อมต่อซิงค์ข้อมูลเรียลไทม์ทุกอุปกรณ์อัตโนมัติ' : 'คลิกเพื่อซิงค์ข้อมูล'}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 hover:bg-white text-slate-800 border border-amber-400/80 shadow-2xs hover:shadow-xs transition-all cursor-pointer text-xs font-semibold"
               >
                 <RefreshCw className={`w-3.5 h-3.5 text-amber-700 ${isSyncing ? 'animate-spin text-amber-500' : ''}`} />
                 <span className="hidden xl:inline text-[11px] text-slate-700">
-                  {isSyncing ? 'กำลังซิงค์...' : 'ซิงค์ข้อมูล'}
+                  {isSyncing ? 'กำลังซิงค์...' : isRealtimeConnected ? 'ซิงค์เรียลไทม์ทุกอุปกรณ์' : 'ซิงค์ข้อมูล'}
                 </span>
-                <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-ping' : isGasConnected ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-ping' : isRealtimeConnected ? 'bg-emerald-500 shadow-xs ring-2 ring-emerald-200 animate-pulse' : isGasConnected ? 'bg-emerald-500' : 'bg-slate-400'}`} />
               </button>
 
 

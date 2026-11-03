@@ -26,6 +26,20 @@ const DEFAULT_SETTINGS = {
 
 let lastServerSaveTime = 0;
 
+// Set of connected SSE clients for real-time cross-device streaming
+const sseClients = new Set<express.Response>();
+
+export function broadcastToAllClients(eventType: string, payload: any) {
+  const message = `event: ${eventType}\ndata: ${JSON.stringify(payload)}\n\n`;
+  sseClients.forEach((client) => {
+    try {
+      client.write(message);
+    } catch {
+      sseClients.delete(client);
+    }
+  });
+}
+
 interface StoreData {
   settings: typeof DEFAULT_SETTINGS;
   menuBank: any[];
@@ -294,6 +308,7 @@ async function syncFromGas(gasUrl?: string): Promise<boolean> {
       if (changed) {
         current.lastUpdated = new Date().toISOString();
         writeStore(current);
+        broadcastToAllClients('DATA_UPDATED', current);
         console.log(`[AutoSync] Synced ${current.dailyMenus.length} daily menus, ${current.menuBank.length} menu items, and ${(current.taxRecords || []).length} tax records from Google Sheets`);
       }
       return true;
@@ -320,12 +335,46 @@ async function startServer() {
   // Always perform sync from Google Sheets on server startup
   syncFromGas().catch((err) => console.warn('Initial GAS sync notice:', err));
 
-  // Periodic automatic synchronization from Google Sheets (every 30s) across all devices
+  // Periodic automatic synchronization from Google Sheets (every 15s) across all devices
   setInterval(() => {
-    if (Date.now() - lastServerSaveTime > 45000) {
+    if (Date.now() - lastServerSaveTime > 8000) {
       syncFromGas().catch((err) => console.warn('Periodic GAS sync notice:', err));
     }
-  }, 30000);
+  }, 15000);
+
+  // -----------------------------------------------------------------
+  // 0. GET /api/events - Real-time Server-Sent Events (SSE) Stream
+  // Transmits instant updates across all devices, browsers, and accounts
+  // -----------------------------------------------------------------
+  app.get(['/api/events', '/api/realtime-stream'], (_req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.flushHeaders?.();
+
+    const current = readStore();
+    // Send immediate initial store snapshot
+    res.write(`event: INIT_STATE\ndata: ${JSON.stringify(current)}\n\n`);
+
+    sseClients.add(res);
+
+    // Keep-alive ping every 15s to keep mobile/proxy connection alive
+    const keepAliveTimer = setInterval(() => {
+      try {
+        res.write(': keep-alive ping\n\n');
+      } catch {
+        clearInterval(keepAliveTimer);
+        sseClients.delete(res);
+      }
+    }, 15000);
+
+    _req.on('close', () => {
+      clearInterval(keepAliveTimer);
+      sseClients.delete(res);
+    });
+  });
 
   // -----------------------------------------------------------------
   // 1. GET /api/data - Fetch all synchronized school data
@@ -398,6 +447,9 @@ async function startServer() {
       lastServerSaveTime = Date.now();
       writeStore(current);
 
+      // กระจายข้อมูลแบบเรียลไทม์ทันที 0ms ไปยังทุกเครื่อง ทุกอุปกรณ์ที่เปิดหน้าเว็บอยู่
+      broadcastToAllClients('DATA_UPDATED', current);
+
       // Debounced background sync to GAS (merges rapid edits into 1 call)
       const gasUrl = current.settings.gasWebAppUrl || DEFAULT_SETTINGS.gasWebAppUrl;
       if (gasUrl && syncToGas !== false) {
@@ -446,6 +498,9 @@ async function startServer() {
 
       lastServerSaveTime = Date.now();
       writeStore(current);
+
+      // กระจายข้อมูลที่ถูกลบแบบเรียลไทม์ 0ms ไปยังทุกเครื่อง ทุกอุปกรณ์ทันที
+      broadcastToAllClients('DATA_UPDATED', current);
 
       // สั่งซิงค์ลง Google Sheets แบบทันทีเพื่อล้างข้อมูลแถวที่ลบออกจากชีต
       const gasUrl = current.settings.gasWebAppUrl || DEFAULT_SETTINGS.gasWebAppUrl;
@@ -498,6 +553,7 @@ async function startServer() {
             const driveUrl = gasRes.directUrl || gasRes.logoUrl;
             current.settings.logoUrl = driveUrl;
             writeStore(current);
+            broadcastToAllClients('DATA_UPDATED', current);
 
             return res.json({
               success: true,
@@ -515,6 +571,7 @@ async function startServer() {
       // Fallback: Store logo in persistent central store
       current.settings.logoUrl = fileData;
       writeStore(current);
+      broadcastToAllClients('DATA_UPDATED', current);
 
       res.json({
         success: true,
@@ -647,6 +704,7 @@ async function startServer() {
         }
 
         writeStore(current);
+        broadcastToAllClients('DATA_UPDATED', current);
         return res.json({
           success: true,
           settings: current.settings,
