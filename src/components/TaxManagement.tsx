@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { TaxRecord, SchoolSettings } from '../types';
-import { saveServerData } from '../services/api';
+import { saveServerData, broadcastLocalChange } from '../services/api';
 import { 
   Calculator, 
   Calendar as CalendarIcon, 
@@ -140,15 +140,20 @@ export const TaxManagement: React.FC<TaxManagementProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'unpaid'>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [deleteRecordId, setDeleteRecordId] = useState<string | null>(null);
+  const lastUserActionTimeRef = React.useRef<number>(0);
 
-  // Helper to commit updates triggered by user actions only
+  // Helper to commit updates triggered by user actions immediately and smoothly
   const commitRecordsUpdate = (newRecords: TaxRecord[]) => {
+    lastUserActionTimeRef.current = Date.now();
     setRecords(newRecords);
     try {
       localStorage.setItem(STORAGE_KEY_TAX_RECORDS, JSON.stringify(newRecords));
     } catch (e) {
       console.error('Failed to save tax records', e);
     }
+    // ส่ง Broadcast ข้ามแท็บทันที 0ms
+    broadcastLocalChange('TAX_RECORDS', newRecords);
+
     if (onSaveRecords) {
       onSaveRecords(newRecords);
     } else {
@@ -157,8 +162,12 @@ export const TaxManagement: React.FC<TaxManagementProps> = ({
   };
 
   // Sync records from external central store (Google Sheets / Server) ONLY when content actually differs
+  // และไม่ทับสถานะที่ผู้ใช้เพิ่งกดในเครื่องภายใน 3 วินาทีเด็ดขาด
   useEffect(() => {
     if (externalRecords && Array.isArray(externalRecords) && externalRecords.length > 0) {
+      if (Date.now() - lastUserActionTimeRef.current < 3000) {
+        return;
+      }
       setRecords((prev) => {
         if (prev === externalRecords) return prev;
         if (prev.length === externalRecords.length && JSON.stringify(prev) === JSON.stringify(externalRecords)) {

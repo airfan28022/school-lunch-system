@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { SchoolSettings } from '../types';
 import { FALLBACK_IMAGE_URL } from '../services/api';
 import { 
   Settings, 
-  Clock, 
-  RefreshCw,
   LogOut,
   User
 } from 'lucide-react';
@@ -13,7 +11,7 @@ interface HeaderProps {
   settings: SchoolSettings;
   activeTab: 'repository' | 'planner' | 'report' | 'tax' | 'settings';
   onTabChange: (tab: 'repository' | 'planner' | 'report' | 'tax' | 'settings') => void;
-  isGasConnected: boolean;
+  isGasConnected?: boolean;
   isSyncing?: boolean;
   isRealtimeConnected?: boolean;
   onManualSync?: () => void;
@@ -25,48 +23,9 @@ export const Header: React.FC<HeaderProps> = ({
   settings,
   activeTab,
   onTabChange,
-  isGasConnected,
-  isSyncing = false,
-  isRealtimeConnected = true,
-  onManualSync,
   onLogout,
   username = 'Admin'
 }) => {
-  const [currentTime, setCurrentTime] = useState<Date>(new Date());
-
-  // Real-time live clock
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Format Thai Date & Time
-  const formatThaiDateTime = (date: Date) => {
-    const days = ['วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'];
-    const months = [
-      'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-      'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-    ];
-    
-    const dayName = days[date.getDay()];
-    const dayNum = date.getDate();
-    const monthName = months[date.getMonth()];
-    const buddhistYear = date.getFullYear() + 543;
-    
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-
-    return {
-      dateStr: `${dayName}ที่ ${dayNum} ${monthName} พ.ศ. ${buddhistYear}`,
-      timeStr: `${hours}:${minutes}:${seconds} น.`
-    };
-  };
-
-  const { dateStr, timeStr } = formatThaiDateTime(currentTime);
-
   return (
     <header className="no-print bg-white shadow-xs sticky top-0 z-40">
       {/* Top Banner: School Section - Yellow Gradient & Narrower */}
@@ -96,38 +55,8 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
 
-            {/* Real-time Clock, Settings Icon & Sync controls */}
-            <div className="flex items-center justify-between sm:justify-end gap-2 pt-1 sm:pt-0 border-t sm:border-t-0 border-amber-300/60">
-              {/* Live Clock Card */}
-              <div 
-                id="header-live-clock"
-                className="flex items-center gap-2 bg-white/90 backdrop-blur-xs border border-amber-400/80 px-2.5 sm:px-3 py-1 rounded-xl shadow-2xs"
-              >
-                <Clock className="w-3.5 h-3.5 text-amber-700 shrink-0 animate-pulse" />
-                <div className="text-right">
-                  <div className="text-[10px] sm:text-[11px] font-medium text-slate-700 tracking-tight">
-                    {dateStr}
-                  </div>
-                  <div className="text-xs font-mono font-bold text-amber-900 leading-none">
-                    {timeStr}
-                  </div>
-                </div>
-              </div>
-
-              {/* High-speed Realtime Sync Button & Badge */}
-              <button
-                id="btn-quick-sync"
-                onClick={onManualSync}
-                disabled={isSyncing}
-                title={isSyncing ? 'กำลังซิงค์ข้อมูล...' : isRealtimeConnected ? 'เชื่อมต่อซิงค์ข้อมูลเรียลไทม์ทุกอุปกรณ์อัตโนมัติ' : 'คลิกเพื่อซิงค์ข้อมูล'}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/95 hover:bg-white text-slate-800 border border-amber-400/80 shadow-2xs hover:shadow-xs transition-all cursor-pointer text-xs font-semibold"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 text-amber-700 ${isSyncing ? 'animate-spin text-amber-500' : ''}`} />
-                <span className="hidden xl:inline text-[11px] text-slate-700">
-                  {isSyncing ? 'กำลังซิงค์...' : isRealtimeConnected ? 'ซิงค์เรียลไทม์ทุกอุปกรณ์' : 'ซิงค์ข้อมูล'}
-                </span>
-                <span className={`w-2 h-2 rounded-full ${isSyncing ? 'bg-amber-400 animate-ping' : isRealtimeConnected ? 'bg-emerald-500 shadow-xs ring-2 ring-emerald-200 animate-pulse' : isGasConnected ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-              </button>
+            {/* Top-Right Settings & User Controls */}
+            <div className="flex items-center justify-end gap-2 pt-1 sm:pt-0">
 
 
               {/* Top-Right Settings Icon */}

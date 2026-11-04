@@ -599,7 +599,13 @@ export default function App() {
         }
 
         if (Array.isArray(data.taxRecords)) {
-          setTaxRecords(data.taxRecords);
+          // หากผู้ใช้เพิ่งมีการกดจ่ายแล้ว/ยังไม่จ่ายหรือแก้ไขในเครื่องนี้ภายใน 3 วินาที ให้รักษาข้อมูลในเครื่องไว้เสมอ
+          if (Date.now() - lastLocalSaveTimeRef.current >= 3000 || isInitial) {
+            setTaxRecords(data.taxRecords);
+            try {
+              localStorage.setItem(STORAGE_KEY_TAX_RECORDS, JSON.stringify(data.taxRecords));
+            } catch {}
+          }
         }
       }
     };
@@ -608,8 +614,8 @@ export default function App() {
     const unsubscribeRealtime = subscribeToRealtimeSync(
       (serverData, eventType) => {
         if (!isMounted || !serverData) return;
-        // หากผู้ใช้เพิ่งกดสุ่มหรือบันทึกใหม่ในเครื่องนี้เองภายใน 1.5 วินาที ให้ข้ามเพื่อไม่ชนกับคำขอในมือ
-        if (Date.now() - lastLocalSaveTimeRef.current < 1500 && eventType !== 'INIT_STATE') {
+        // หากผู้ใช้เพิ่งกดในเครื่องนี้เองภายใน 3 วินาที ให้ข้ามเพื่อไม่ชนกับคำขอในมือ
+        if (Date.now() - lastLocalSaveTimeRef.current < 3000 && eventType !== 'INIT_STATE') {
           return;
         }
         applyIncomingServerPayload(serverData, eventType === 'INIT_STATE');
@@ -651,8 +657,8 @@ export default function App() {
 
     const pullServerData = async (isInitial = false) => {
       if (isPulling) return;
-      // ป้องกันการดึงข้อมูลทับข้อมูลที่เพิ่งสุ่มหรือบันทึกใหม่ในเครื่องภายใน 1.5 วินาที
-      if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 1500) {
+      // ป้องกันการดึงข้อมูลทับข้อมูลที่เพิ่งกดจ่าย/สุ่มหรือบันทึกใหม่ในเครื่องภายใน 3 วินาที
+      if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 3000) {
         return;
       }
 
@@ -662,7 +668,7 @@ export default function App() {
         const data = await fetchServerData(settings.gasWebAppUrl);
         if (!isMounted || !data || !data.success) return;
 
-        if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 1500) {
+        if (!isInitial && Date.now() - lastLocalSaveTimeRef.current < 3000) {
           return;
         }
 

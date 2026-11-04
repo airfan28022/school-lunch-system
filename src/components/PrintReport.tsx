@@ -1065,7 +1065,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
       >
         {/* Printable Header */}
         <div className="print-header text-center pb-1.5 mb-2.5">
-          <h1 className="text-base sm:text-2xl font-bold text-slate-900 text-center tracking-normal leading-snug">
+          <h1 className="text-sm sm:text-lg font-bold text-slate-900 text-center tracking-normal leading-snug">
             รายงานอาหารกลางวัน ประจำเดือน {thaiMonthName} {buddhistYear}
           </h1>
           {(settings.schoolName || settings.department) && (
@@ -1719,7 +1719,7 @@ export const PrintReport: React.FC<PrintReportProps> = ({
               >
                 {/* Document Header */}
                 <div className="text-center pb-2 mb-3">
-                  <h1 className="text-2xl sm:text-3xl font-bold text-black tracking-normal leading-snug">
+                  <h1 className="text-lg sm:text-xl font-bold text-black tracking-normal leading-snug">
                     รายงานอาหารกลางวัน ประจำเดือน {thaiMonthName} {buddhistYear}
                   </h1>
                   {(settings.schoolName || settings.department) && (
