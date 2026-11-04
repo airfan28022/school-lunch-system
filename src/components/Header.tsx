@@ -28,35 +28,36 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="no-print bg-white shadow-xs sticky top-0 z-40">
-      {/* Top Banner: School Section - Yellow Gradient & Narrower */}
+      {/* Top Banner: School Section - Ultra-compact on mobile to maximize content area */}
       <div className="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-300 border-b border-amber-300/80">
-        <div className="max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 py-1.5 sm:py-2">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
+        <div className="max-w-[1700px] mx-auto px-3 sm:px-6 lg:px-8 py-1 sm:py-2">
+          <div className="flex flex-row items-center justify-between gap-2">
             
             {/* School Brand & Logo */}
-            <div className="flex items-center gap-3">
-              <div className="relative w-10 h-10 sm:w-11 sm:h-11 rounded-xl overflow-hidden bg-white p-0.5 border border-amber-400/90 shrink-0 shadow-2xs flex items-center justify-center">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="relative w-7 h-7 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl overflow-hidden bg-white p-0.5 border border-amber-400/90 shrink-0 shadow-2xs flex items-center justify-center">
                 <img
                   src={settings.logoUrl || FALLBACK_IMAGE_URL}
                   alt="ตราสัญลักษณ์โรงเรียน"
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-cover rounded-md sm:rounded-lg"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = FALLBACK_IMAGE_URL;
                   }}
                 />
               </div>
-              <div>
-                <h1 className="text-base sm:text-lg font-extrabold text-slate-900 leading-tight">
+              <div className="min-w-0">
+                <h1 className="text-xs sm:text-lg font-extrabold text-slate-900 leading-tight truncate">
                   {settings.schoolName || 'ระบบบริหารจัดการอาหารกลางวันโรงเรียน'}
                 </h1>
-                <p className="text-xs font-semibold text-slate-800 line-clamp-1">
+                {/* Department: Hidden on mobile to save vertical space, visible on tablet/desktop */}
+                <p className="hidden sm:block text-xs font-semibold text-slate-800 line-clamp-1">
                   {settings.department || 'สังกัดสำนักการศึกษา'}
                 </p>
               </div>
             </div>
 
             {/* Top-Right Settings & User Controls */}
-            <div className="flex items-center justify-end gap-2 pt-1 sm:pt-0">
+            <div className="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0">
 
 
               {/* Top-Right Settings Icon */}
